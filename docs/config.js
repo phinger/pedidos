@@ -5,5 +5,5 @@ window.PEDIDOS_CONFIG = {
   apiUrl:   'PEGAR_URL_DEL_WEB_APP_AQUI',
 
   /* Client ID del cliente OAuth 2.0 (tipo Web) de Google Cloud */
-  clientId: 'PEGAR_CLIENT_ID_AQUI',
+  clientId: '938884961121-4mkkgm298jcqgql6jq9p9vps45e3gncu.apps.googleusercontent.com',
 };

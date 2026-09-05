@@ -171,8 +171,9 @@ async function desafioPKCE(verifier) {
   return b64url(hash);
 }
 
-/* Debe coincidir exactamente con el "Authorized redirect URI" del cliente OAuth. */
-const redirectURI = () => location.origin + location.pathname;
+/* Debe coincidir exactamente con el "Authorized redirect URI" del cliente OAuth.
+   Se recorta "index.html" para que abrir esa ruta a mano no rompa el login. */
+const redirectURI = () => location.origin + location.pathname.replace(/index\.html$/, '');
 
 async function iniciarLogin() {
   if (!CFG.clientId || CFG.clientId.includes('PEGAR_')) {
