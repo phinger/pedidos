@@ -1,6 +1,6 @@
 /* Service worker: deja la app abriendo instantánea.
    Al publicar cambios, subir VERSION para invalidar el caché. */
-const VERSION = 'pedidos-v9';
+const VERSION = 'pedidos-v10';
 
 /* Los assets van versionados desde index.html: es lo único que le gana a un
    service worker viejo que quedó sirviendo caché-primero, porque esa URL no
@@ -9,9 +9,9 @@ const VERSION = 'pedidos-v9';
 const RECURSOS = [
   './',
   './index.html',
-  './styles.css?v=9',
-  './app.js?v=9',
-  './config.js?v=9',
+  './styles.css?v=10',
+  './app.js?v=10',
+  './config.js?v=10',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -41,16 +41,26 @@ self.addEventListener('fetch', (e) => {
      verse: la primera servía lo viejo y recién ahí refrescaba. Con la app ya
      instalada eso es muy confuso. La caída a caché mantiene el arranque
      offline. */
+  /* La navegación se pide con cache:'reload' para saltear la caché HTTP del
+     navegador. GitHub Pages manda cache-control: max-age=600 en el HTML, así
+     que sin esto Safari respondía con el index.html viejo hasta diez minutos
+     después de publicar, y el ?v= de los assets nunca se enteraba del cambio. */
+  const navegacion = e.request.mode === 'navigate';
+  const pedirALaRed = () => {
+    if (!navegacion) return fetch(e.request);
+    try { return fetch(e.request, { cache: 'reload' }); }
+    catch (err) { return fetch(e.request); }        // navegadores sin la opción
+  };
+
   e.respondWith(
-    fetch(e.request)
+    pedirALaRed()
       .then((respuesta) => {
         if (respuesta && respuesta.status === 200) {
           const copia = respuesta.clone();
-          caches.open(VERSION).then((c) => c.put(
-            e.request.mode === 'navigate' ? './index.html' : e.request, copia));
+          caches.open(VERSION).then((c) => c.put(navegacion ? './index.html' : e.request, copia));
         }
         return respuesta;
       })
-      .catch(() => caches.match(e.request.mode === 'navigate' ? './index.html' : e.request))
+      .catch(() => caches.match(navegacion ? './index.html' : e.request))
   );
 });
