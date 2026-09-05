@@ -356,7 +356,8 @@ function renderChips() {
     if (p.categoria && !categorias.includes(p.categoria)) categorias.push(p.categoria);
   }
   cont.innerHTML = '';
-  if (categorias.length < 2) return;   // una sola categoría: los chips no aportan
+  cont.hidden = categorias.length < 2;   // sin categorías la fila no ocupa lugar
+  if (cont.hidden) return;
 
   for (const [valor, etiqueta] of [[TODAS, 'Todo'], ...categorias.map((c) => [c, c])]) {
     const chip = document.createElement('button');

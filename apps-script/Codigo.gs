@@ -26,7 +26,7 @@ const CFG = {
      prueba por "contiene". Para adaptarlo a la planilla real alcanza con
      agregar el nombre verdadero al principio de la lista.                */
   COLS_PRODUCTOS: {
-    nombre:    ['producto', 'nombre', 'descripcion', 'detalle'],   // requerida
+    nombre:    ['nombres', 'producto', 'nombre', 'descripcion'],   // requerida
     categoria: ['categoria', 'rubro', 'familia', 'grupo'],
     unidad:    ['unidad', 'presentacion', 'medida', 'envase'],
     activo:    ['activo', 'habilitado', 'visible', 'vigente'],
@@ -538,6 +538,65 @@ function probarEstructura() {
           : '⚠️ NO ENCONTRADA');
       }
     });
+}
+
+/**
+ * Deja la planilla lista para la app. Es idempotente: si algo ya está bien,
+ * no lo toca. Ejecutar a mano desde el editor, una sola vez.
+ *
+ * - Solapa de pedidos: crea la fila de encabezados si está vacía.
+ * - Solapa de usuarios: si los emails arrancan en la fila 1, inserta arriba
+ *   la fila de encabezados y marca como activos los que ya estaban.
+ */
+function prepararPlanilla() {
+  const informe = [];
+
+  /* ── Pedidos ── */
+  const pedidos = _hoja(CFG.HOJA_PEDIDOS);
+  if (pedidos.getLastRow() === 0) {
+    const encabezados = ['ID', 'Fecha', 'Hora', 'Nombre', 'Detalle', 'Total', 'Status', 'Email'];
+    pedidos.getRange(1, 1, 1, encabezados.length).setValues([encabezados]).setFontWeight('bold');
+    pedidos.setFrozenRows(1);
+    pedidos.getRange('B:B').setNumberFormat('dd/MM/yyyy');
+    pedidos.setColumnWidth(5, 420);   // "Detalle" es la columna larga
+    informe.push('Pedidos: encabezados creados.');
+  } else {
+    informe.push('Pedidos: ya tenía contenido, no se tocó nada.');
+  }
+
+  /* ── Usuarios ── */
+  const usuarios = _hoja(CFG.HOJA_USUARIOS);
+  const primeraFila = usuarios.getRange(1, 1, 1, Math.max(1, usuarios.getLastColumn()))
+    .getValues()[0].map(_normalizar);
+
+  if (_buscarColumna(primeraFila, ['email', 'mail', 'correo', 'usuario']) < 0) {
+    usuarios.insertRowBefore(1);
+    usuarios.getRange(1, 1, 1, 2).setValues([['Email', 'Activo']]).setFontWeight('bold');
+    usuarios.setFrozenRows(1);
+
+    /* Los emails que ya estaban quedan activos: si la columna quedara vacía,
+       el script los leería como dados de baja y nadie podría entrar. */
+    const cuantos = usuarios.getLastRow() - 1;
+    if (cuantos > 0) {
+      const emails = usuarios.getRange(2, 1, cuantos, 1).getValues();
+      usuarios.getRange(2, 2, cuantos, 1).setValues(
+        emails.map(function (f) { return [String(f[0]).trim() ? 'SI' : '']; }));
+    }
+    informe.push('Usuarios: se insertó la fila de encabezados y se marcaron ' +
+      cuantos + ' email(s) como activos.');
+  } else {
+    informe.push('Usuarios: ya tenía encabezados.');
+  }
+
+  CacheService.getScriptCache().remove('allowlist');
+  SpreadsheetApp.flush();
+
+  /* ── Control de lo que va a ver la app ── */
+  const productos = accionProductos().productos;
+  informe.push('Catálogo: ' + productos.length + ' productos.');
+  informe.push('Primeros: ' + productos.slice(0, 6).map(function (p) { return p.nombre; }).join(' · '));
+
+  Logger.log(informe.join('\n'));
 }
 
 /** Borra sesiones vencidas y claves de idempotencia viejas. Opcional: activador diario. */

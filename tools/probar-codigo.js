@@ -42,9 +42,21 @@ class HojaFalsa {
     return ultima;
   }
   getLastColumn() { return this.datos[0] ? this.datos[0].length : 0; }
+  setFrozenRows() { return this; }
+  setColumnWidth() { return this; }
+  insertRowBefore(fila) {
+    const ancho = this.datos[0] ? this.datos[0].length : 0;
+    this.datos.splice(fila - 1, 0, new Array(ancho).fill(''));
+    return this;
+  }
   getDataRange() { return this.getRange(1, 1, this.getLastRow(), this.getLastColumn()); }
   getRange(fila, col, numFilas = 1, numCols = 1) {
     const hoja = this;
+    /* Forma "B:B": solo se usa para dar formato, no hace falta simularla. */
+    if (typeof fila === 'string') {
+      return { setNumberFormat() { return this; }, setValues() { return this; },
+               setFontWeight() { return this; }, getValues: () => [[]] };
+    }
     return {
       getValues() {
         hoja._asegurarFila(fila + numFilas - 1);
@@ -57,6 +69,18 @@ class HojaFalsa {
         }
         return salida;
       },
+      setValues(matriz) {
+        hoja._asegurarFila(fila + matriz.length - 1);
+        matriz.forEach((linea, f) => {
+          linea.forEach((v, c) => {
+            hoja.datos[fila - 1 + f][col - 1 + c] = v;
+            hoja.escrituras.push({ fila: fila + f, col: col + c, valor: v });
+          });
+        });
+        return this;
+      },
+      setFontWeight() { return this; },
+      setNumberFormat() { return this; },
       setValue(v) {
         hoja._asegurarFila(fila);
         hoja.datos[fila - 1][col - 1] = v;
@@ -448,6 +472,78 @@ probar('el modo copiar arrastra la fórmula de status', () => {
   pedidoDe(ctx, token, 'Juana', 'k1');
   igual(hojas[1].copias.length, 1, 'debería haber copiado la fórmula');
   igual(hojas[1].copias[0], { desde: { fila: 2, col: 7 }, hacia: { fila: 3, col: 7 } });
+});
+
+console.log('\nPreparación de la planilla');
+
+/* Reproduce la planilla real: catálogo de una sola columna, solapa de pedidos
+   vacía y emails cargados desde la fila 1, sin encabezado. */
+function entornoCrudo() {
+  const hojas = [
+    new HojaFalsa('Lista de Productos', [
+      ['NOMBRES'], ['Almendras'], ['Nuez pecán'], [''], ['Pasas de uva'],
+    ]),
+    new HojaFalsa('Pedidos', [[]]),
+    new HojaFalsa('Usuarios', [['gimena@ahrensasoc.com'], ['phinger@gmail.com']]),
+  ];
+  const ctx = construirContexto({
+    hojas, respuestaToken: { codigo: 200, cuerpo: { id_token: jwt(cargaValida('phinger@gmail.com')) } },
+  });
+  ctx.props.set('CLIENT_ID', CLIENT_ID);
+  ctx.props.set('CLIENT_SECRET', 'secreto');
+  return { ctx, hojas };
+}
+
+probar('sin preparar, los emails sueltos dejan a todos afuera', () => {
+  const { ctx } = entornoCrudo();
+  igual(login(ctx).codigo, 'SIN_CONFIG', 'debería avisar que falta la columna email');
+});
+
+probar('prepararPlanilla arma los encabezados de Pedidos', () => {
+  const { ctx, hojas } = entornoCrudo();
+  ctx.prepararPlanilla();
+  igual(hojas[1].datos[0],
+    ['ID', 'Fecha', 'Hora', 'Nombre', 'Detalle', 'Total', 'Status', 'Email']);
+});
+
+probar('prepararPlanilla corrige Usuarios sin dejar a nadie afuera', () => {
+  const { ctx, hojas } = entornoCrudo();
+  ctx.prepararPlanilla();
+  igual(hojas[2].datos[0], ['Email', 'Activo'], 'fila de encabezados');
+  igual(hojas[2].datos[1], ['gimena@ahrensasoc.com', 'SI'], 'el email que ya estaba queda activo');
+  igual(hojas[2].datos[2], ['phinger@gmail.com', 'SI']);
+  afirmar(login(ctx).ok, 'después de preparar, el login debería funcionar');
+});
+
+probar('el catálogo de una sola columna se lee igual', () => {
+  const { ctx } = entornoCrudo();
+  ctx.prepararPlanilla();
+  const token = login(ctx).token;
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+  igual(productos.map((p) => p.nombre), ['Almendras', 'Nuez pecán', 'Pasas de uva'],
+    'debería saltear la fila vacía');
+  igual(productos[0].categoria, '', 'sin columna de categoría queda vacía');
+});
+
+probar('el pedido entra bien en la solapa recién preparada', () => {
+  const { ctx, hojas } = entornoCrudo();
+  ctx.prepararPlanilla();
+  const token = login(ctx).token;
+  const r = pedidoDe(ctx, token, 'Gimena', 'k1');
+  igual(r.id, 'P-0001');
+  igual(hojas[1].datos[1][4], 'Almendras x3; Nuez pecán x2');
+  igual(hojas[1].datos[1][6], '', 'la columna de status queda libre');
+});
+
+probar('prepararPlanilla se puede correr dos veces sin romper nada', () => {
+  const { ctx, hojas } = entornoCrudo();
+  ctx.prepararPlanilla();
+  const token = login(ctx).token;
+  pedidoDe(ctx, token, 'Gimena', 'k1');
+  ctx.prepararPlanilla();
+  igual(hojas[2].datos[0], ['Email', 'Activo'], 'no debería duplicar encabezados');
+  igual(hojas[1].getLastRow(), 2, 'no debería tocar los pedidos ya cargados');
+  afirmar(llamar(ctx, { accion: 'productos', token }).ok, 'la sesión sigue viva');
 });
 
 console.log('\n' + (fallas === 0
