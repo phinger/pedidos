@@ -293,7 +293,8 @@ async function entrarALaApp() {
   cargarBorrador();
   actualizarNombresRecientes();
 
-  const cache = leerJSON(LS.catalogo, null);
+  /* En demo no se toca el caché real: ni se lee ni se escribe. */
+  const cache = demo ? null : leerJSON(LS.catalogo, null);
   if (cache && Array.isArray(cache.productos) && cache.productos.length) {
     aplicarCatalogo(cache.productos);
     if (Date.now() - (cache.ts || 0) > CATALOGO_FRESCO_MS) refrescarCatalogo(false);
@@ -310,7 +311,7 @@ function mostrarEsqueletos() {
 async function refrescarCatalogo(manual) {
   try {
     const r = await api('productos');
-    guardarJSON(LS.catalogo, { ts: Date.now(), productos: r.productos });
+    if (!demo) guardarJSON(LS.catalogo, { ts: Date.now(), productos: r.productos });
     aplicarCatalogo(r.productos);
     if (manual) aviso('Catálogo actualizado');
   } catch (e) {
