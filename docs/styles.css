@@ -42,6 +42,11 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* Cualquier regla propia con display —.hoja, .btn, .badge— le gana al atributo
+   hidden, que solo está definido en la hoja de estilos del navegador. Sin esto,
+   las hojas inferiores quedaban visibles siempre, tapando media pantalla. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -217,7 +222,6 @@ button { cursor: pointer; touch-action: manipulation; }
   scroll-snap-type: x proximity;
 }
 .chips::-webkit-scrollbar { display: none; }
-.chips[hidden] { display: none; }
 .chip {
   flex: none;
   height: 34px; padding: 0 14px;

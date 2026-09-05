@@ -105,6 +105,7 @@ function mostrarPantalla(id) {
 }
 
 function abrirHoja(id) {
+  cerrarHojas();            // nunca dos hojas abiertas a la vez
   $('#velo').hidden = false;
   $(id).hidden = false;
 }
@@ -688,7 +689,7 @@ function conectarEventos() {
     const u = estado.usuario;
     /* La versión sirve para saber de un vistazo si el teléfono está corriendo
        el build que se acaba de publicar. */
-    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v6';
+    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v7';
     abrirHoja('#p-menu');
   };
   $('#btn-refrescar').onclick = () => { cerrarHojas(); refrescarCatalogo(true); };
