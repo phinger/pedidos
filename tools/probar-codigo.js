@@ -398,15 +398,31 @@ probar('escribe la fila con todos los campos', () => {
   igual(fila[7], 'juana@ejemplo.com', 'email de quien cargó');
 });
 
-probar('NO escribe la columna de status', () => {
+probar('deja el status en Pendiente', () => {
   const { ctx, hojas } = nuevoEntorno();
+  const token = login(ctx).token;
+  pedidoDe(ctx, token, 'Juana', 'k1');
+  igual(hojas[1].datos[1][6], 'Pendiente', 'el proceso de etiquetas lo actualiza después');
+});
+
+probar('en modo auto no toca la columna de status', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  ctx.evaluar("CFG.MODO_STATUS = 'auto'");
   const token = login(ctx).token;
   pedidoDe(ctx, token, 'Juana', 'k1');
 
   const colStatus = 7;   // 1-based: "Status" es la séptima columna
-  const tocada = hojas[1].escrituras.some((e) => e.col === colStatus);
-  afirmar(!tocada, 'el script escribió sobre la columna de status');
-  igual(hojas[1].datos[1][6], '', 'la celda de status debería quedar libre para el ARRAYFORMULA');
+  afirmar(!hojas[1].escrituras.some((e) => e.col === colStatus),
+    'el script escribió sobre la columna de status');
+  igual(hojas[1].datos[1][6], '', 'la celda debería quedar libre para el ARRAYFORMULA');
+});
+
+probar('avisa si falta la columna de status', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  hojas[1].datos[0] = ['ID', 'Fecha', 'Hora', 'Nombre', 'Detalle', 'Total', 'Email'];
+  const token = login(ctx).token;
+  const r = pedidoDe(ctx, token, 'Juana', 'k1');
+  igual(r.codigo, 'SIN_CONFIG', 'debería avisar en vez de guardar sin status');
 });
 
 probar('el correlativo avanza entre pedidos', () => {
@@ -567,7 +583,7 @@ probar('el pedido entra bien en la solapa recién preparada', () => {
   const r = pedidoDe(ctx, token, 'Gimena', 'k1');
   igual(r.id, 'P-0001');
   igual(hojas[1].datos[1][4], 'Almendras x3; Nuez pecán x2');
-  igual(hojas[1].datos[1][6], '', 'la columna de status queda libre');
+  igual(hojas[1].datos[1][6], 'Pendiente', 'el status arranca en Pendiente');
 });
 
 probar('prepararPlanilla se puede correr dos veces sin romper nada', () => {

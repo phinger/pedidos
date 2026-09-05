@@ -44,11 +44,14 @@ const CFG = {
   COL_STATUS: ['status', 'estado'],
 
   /* ── Cómo se completa la columna de status ─────────────────────────────
-     'auto'   → la fórmula es un ARRAYFORMULA en el encabezado: el script
-                no toca esa columna y se llena sola. Recomendado.
+     'valor'  → el script escribe STATUS_INICIAL y otro proceso lo actualiza
+                después. Es el modo en uso.
+     'auto'   → la fórmula es un ARRAYFORMULA en el encabezado: el script no
+                toca la columna y se llena sola.
      'copiar' → la fórmula está celda por celda: se copia desde la fila
                 anterior conservando las referencias relativas.           */
-  MODO_STATUS: 'auto',
+  MODO_STATUS: 'valor',
+  STATUS_INICIAL: 'Pendiente',
 
   /* ── Otros ────────────────────────────────────────────────────────── */
   PREFIJO_ID:   'P-',
@@ -427,6 +430,7 @@ function accionPedido(p, sesion) {
       .getValues()[0].map(_normalizar);
 
     const col = _mapearColumnas(encabezados, CFG.COLS_PEDIDOS);
+    const colStatus = _buscarColumna(encabezados, CFG.COL_STATUS);
     ['id', 'fecha', 'hora', 'nombre', 'detalle'].forEach(function (campo) {
       if (col[campo] < 0) {
         throw _error('No encontré la columna "' + campo + '" en la solapa "' + CFG.HOJA_PEDIDOS +
@@ -439,8 +443,8 @@ function accionPedido(p, sesion) {
     const ahora = new Date();
     const id = _proximoId(hoja, col.id);
 
-    /* Se escribe celda por celda a propósito: así la columna de status
-       nunca se pisa y su fórmula sigue calculando sola. */
+    /* Se escribe celda por celda a propósito: en los modos 'auto' y 'copiar'
+       la columna de status queda intacta y su fórmula sigue calculando. */
     const aEscribir = {};
     aEscribir[col.id] = id;
     aEscribir[col.fecha] = new Date(
@@ -450,6 +454,15 @@ function accionPedido(p, sesion) {
     aEscribir[col.detalle] = lineas.join('; ');
     if (col.total >= 0) aEscribir[col.total] = total;
     if (col.email >= 0) aEscribir[col.email] = sesion.email;
+
+    /* El pedido nace pendiente; el proceso de etiquetas lo actualiza después. */
+    if (CFG.MODO_STATUS === 'valor') {
+      if (colStatus < 0) {
+        throw _error('No encontré la columna de status en la solapa "' + CFG.HOJA_PEDIDOS +
+          '". Revisá CFG.COL_STATUS.', 'SIN_CONFIG');
+      }
+      aEscribir[colStatus] = CFG.STATUS_INICIAL;
+    }
 
     for (const indice in aEscribir) {
       hoja.getRange(filaNueva, Number(indice) + 1).setValue(aEscribir[indice]);
@@ -558,7 +571,10 @@ function probarEstructura() {
       if (par[0] === CFG.HOJA_PEDIDOS) {
         const cs = _buscarColumna(encabezados, CFG.COL_STATUS);
         Logger.log('   status → %s', cs >= 0
-          ? 'columna ' + (cs + 1) + ' ("' + solapa.encabezados[cs] + '") — no se escribe, modo ' + CFG.MODO_STATUS
+          ? 'columna ' + (cs + 1) + ' ("' + solapa.encabezados[cs] + '") — ' +
+            (CFG.MODO_STATUS === 'valor'
+              ? 'se escribe "' + CFG.STATUS_INICIAL + '" en cada pedido'
+              : 'no se escribe, modo ' + CFG.MODO_STATUS)
           : '⚠️ NO ENCONTRADA');
       }
     });

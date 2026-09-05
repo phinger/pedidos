@@ -40,11 +40,14 @@ Sin esa solapa nadie puede entrar: el script falla cerrado a propósito. Para
 sacarle el acceso a alguien, poné `NO` en Activo — queda afuera en menos de
 5 minutos, sin tocar código.
 
-**Sobre la columna de status:** el script escribe celda por celda y nunca toca
-esa columna. Lo ideal es que la fórmula sea un `ARRAYFORMULA` en el encabezado,
-para que se complete sola en cada fila nueva. Si en cambio está escrita celda
-por celda, cambiá `MODO_STATUS: 'auto'` por `'copiar'` en `Codigo.gs` y el
-script la va a arrastrar desde la fila anterior.
+**Sobre la columna de status:** cada pedido nuevo se guarda con el status en
+`Pendiente`, y un proceso posterior lo actualiza para generar las etiquetas.
+El valor sale de `CFG.STATUS_INICIAL` en `Codigo.gs`.
+
+Si algún día el status pasara a calcularse por fórmula, `CFG.MODO_STATUS`
+admite otros dos modos: `'auto'` (la fórmula es un `ARRAYFORMULA` en el
+encabezado y el script no toca la columna) y `'copiar'` (la fórmula está celda
+por celda y se arrastra desde la fila anterior).
 
 ### 2. Crear el cliente de OAuth
 
@@ -198,6 +201,8 @@ worker invalide el caché viejo.
   los datos.
 - **Fecha y hora las pone el servidor**, con la zona horaria de la planilla: no
   dependen del reloj del teléfono.
+- **El status arranca en `Pendiente`.** La app nunca lo vuelve a tocar: a partir
+  de ahí el dato es del proceso que genera las etiquetas.
 - **Los IDs de producto derivan del nombre**, no del número de fila: se pueden
   reordenar filas sin romper los pedidos a medio cargar.
 - **El borrador se guarda en el teléfono** con cada toque. Si la app se cierra,
