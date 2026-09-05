@@ -686,7 +686,9 @@ function conectarEventos() {
 
   $('#btn-menu').onclick = () => {
     const u = estado.usuario;
-    $('#menu-usuario').textContent = u ? u.email : '';
+    /* La versión sirve para saber de un vistazo si el teléfono está corriendo
+       el build que se acaba de publicar. */
+    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v6';
     abrirHoja('#p-menu');
   };
   $('#btn-refrescar').onclick = () => { cerrarHojas(); refrescarCatalogo(true); };

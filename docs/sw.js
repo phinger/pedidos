@@ -2,12 +2,16 @@
    Al publicar cambios, subir VERSION para invalidar el caché. */
 const VERSION = 'pedidos-v6';
 
+/* Los assets van versionados desde index.html: es lo único que le gana a un
+   service worker viejo que quedó sirviendo caché-primero, porque esa URL no
+   existe en su caché y se ve obligado a ir a la red.
+   Al publicar cambios hay que subir VERSION acá y el ?v= de index.html. */
 const RECURSOS = [
   './',
   './index.html',
-  './styles.css',
-  './app.js',
-  './config.js',
+  './styles.css?v=6',
+  './app.js?v=6',
+  './config.js?v=6',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
