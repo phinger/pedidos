@@ -337,6 +337,16 @@ function accionProductos() {
       '". Revisá CFG.COLS_PRODUCTOS.', 'SIN_CONFIG');
   }
 
+  /* Una columna "Activo" recién agregada y todavía sin completar dejaría el
+     catálogo en cero. Si no hay un solo valor cargado, se ignora la columna;
+     apenas aparece uno, se respeta al pie de la letra. */
+  let filtrarPorActivo = false;
+  if (col.activo >= 0) {
+    for (let i = 1; i < valores.length; i++) {
+      if (String(valores[i][col.activo] || '').trim()) { filtrarPorActivo = true; break; }
+    }
+  }
+
   const usados = {};
   const productos = [];
 
@@ -344,7 +354,7 @@ function accionProductos() {
     const fila = valores[i];
     const nombre = String(fila[col.nombre] || '').trim();
     if (!nombre) continue;
-    if (col.activo >= 0 && !_esVerdadero(fila[col.activo])) continue;
+    if (filtrarPorActivo && !_esVerdadero(fila[col.activo])) continue;
 
     productos.push({
       id: _idProducto(nombre, usados),
@@ -530,6 +540,20 @@ function probarEstructura() {
         Logger.log('   %s → %s', campo,
           mapa[campo] >= 0 ? 'columna ' + (mapa[campo] + 1) + ' ("' + solapa.encabezados[mapa[campo]] + '")'
                            : '⚠️ NO ENCONTRADA');
+      }
+      if (par[0] === CFG.HOJA_PRODUCTOS) {
+        try {
+          const productos = accionProductos().productos;
+          Logger.log('   → la app va a mostrar %s productos: %s…',
+            productos.length,
+            productos.slice(0, 5).map(function (x) { return x.nombre; }).join(' · '));
+          if (!productos.length) {
+            Logger.log('   ⚠️ Ninguno. Revisá la columna "Activo": si tiene algún valor ' +
+              'cargado, las filas vacías se toman como dadas de baja.');
+          }
+        } catch (e) {
+          Logger.log('   ⚠️ %s', e.message);
+        }
       }
       if (par[0] === CFG.HOJA_PEDIDOS) {
         const cs = _buscarColumna(encabezados, CFG.COL_STATUS);

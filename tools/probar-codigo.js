@@ -330,6 +330,41 @@ probar('los ids son estables y no dependen del número de fila', () => {
     'el id no debería cambiar al reordenar');
 });
 
+probar('una columna Activo vacía no vacía el catálogo', () => {
+  const hojas = hojasDePrueba();
+  hojas[0] = new HojaFalsa('Lista de Productos', [
+    ['NOMBRES', 'Categoria', 'Unidad', 'Activo', 'Orden'],
+    ['Almendras', '', '', '', ''],
+    ['Nuez pecán', '', '', '', ''],
+  ]);
+  const ctx = construirContexto({
+    hojas, respuestaToken: { codigo: 200, cuerpo: { id_token: jwt(cargaValida('juana@ejemplo.com')) } },
+  });
+  ctx.props.set('CLIENT_ID', CLIENT_ID);
+  ctx.props.set('CLIENT_SECRET', 'secreto');
+  const token = login(ctx).token;
+  igual(llamar(ctx, { accion: 'productos', token }).productos.map((p) => p.nombre),
+    ['Almendras', 'Nuez pecán'], 'sin valores cargados la columna debería ignorarse');
+});
+
+probar('con un solo valor cargado, la columna Activo pasa a mandar', () => {
+  const hojas = hojasDePrueba();
+  hojas[0] = new HojaFalsa('Lista de Productos', [
+    ['NOMBRES', 'Categoria', 'Unidad', 'Activo', 'Orden'],
+    ['Almendras', '', '', 'SI', ''],
+    ['Nuez pecán', '', '', '', ''],
+    ['Pasas', '', '', 'NO', ''],
+  ]);
+  const ctx = construirContexto({
+    hojas, respuestaToken: { codigo: 200, cuerpo: { id_token: jwt(cargaValida('juana@ejemplo.com')) } },
+  });
+  ctx.props.set('CLIENT_ID', CLIENT_ID);
+  ctx.props.set('CLIENT_SECRET', 'secreto');
+  const token = login(ctx).token;
+  igual(llamar(ctx, { accion: 'productos', token }).productos.map((p) => p.nombre),
+    ['Almendras'], 'las filas en blanco quedan afuera');
+});
+
 console.log('\nAlta de pedidos');
 
 const pedidoDe = (ctx, token, nombre, clave) => {
