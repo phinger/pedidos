@@ -48,21 +48,63 @@ script la va a arrastrar desde la fila anterior.
 
 ### 2. Crear el cliente de OAuth
 
-En [console.cloud.google.com](https://console.cloud.google.com):
+Le permite a la app preguntarle a Google quién sos y recibir una respuesta
+firmada. No hace falta habilitar ninguna API: el login con `openid email
+profile` viene de fábrica.
 
-1. Creá un proyecto (o usá uno existente).
-2. **APIs y servicios → Pantalla de consentimiento de OAuth**: tipo *Externo*,
-   completá nombre y email de contacto, y agregá tu cuenta en *Usuarios de
-   prueba*. No hace falta publicar la app ni pasar verificación.
-3. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de
-   OAuth**, tipo **Aplicación web**:
-   - *Orígenes autorizados de JavaScript*: `https://TU_USUARIO.github.io`
-   - *URI de redirección autorizados*: `https://TU_USUARIO.github.io/pedidos/`
-     — con la barra final, exactamente igual a la URL de la app.
-4. Anotá el **Client ID** y el **Client secret**.
+En [console.cloud.google.com](https://console.cloud.google.com), con la cuenta
+dueña de la planilla:
 
-> Para probar en la compu, agregá también `http://localhost:8000` como origen y
-> `http://localhost:8000/` como URI de redirección.
+**2.1 · El proyecto.** Selector de proyecto (arriba, al lado del logo) →
+*Proyecto nuevo* → nombre `Pedidos` → *Crear*. Después **seleccionalo** en ese
+mismo selector: configurar todo sobre otro proyecto es el error más común.
+
+**2.2 · Marca y público.** Menú ☰ → *APIs y servicios* → *Pantalla de
+consentimiento de OAuth* (redirige a **Google Auth Platform**) → *Comenzar*:
+
+| Campo | Valor |
+|---|---|
+| Nombre de la app | `Pedidos` — es lo que se ve al iniciar sesión |
+| Correo de asistencia | tu Gmail |
+| Público | **Externo** |
+| Datos de contacto | tu Gmail |
+
+*Externo* no quiere decir abierto a cualquiera: solo significa que no estás en
+un dominio de Workspace. El acceso lo controlan los dos pasos siguientes.
+
+**2.3 · Usuarios de prueba.** En la sección *Público*, el estado queda en
+**Prueba**. Bajá a *Usuarios de prueba* → *Agregar usuarios* → tu Gmail y el de
+cada persona que vaya a cargar pedidos.
+
+> **Son dos listas y tienen que coincidir.** Google Cloud define quién puede
+> *loguearse*; la solapa `Usuarios` de la planilla define quién puede *cargar
+> pedidos*. Quien esté en una sola, no entra. Tope: 100 usuarios de prueba.
+
+Dos falsas alarmas frecuentes: **no** necesitás verificación de Google (pedimos
+solo scopes básicos), y **no** te afecta la expiración de refresh tokens a los
+7 días de las apps en prueba, porque la app no guarda refresh tokens — canjea
+el código una sola vez y después la sesión la emite el propio Apps Script.
+
+**2.4 · El cliente.** Sección *Clientes* → *Crear cliente* → tipo **Aplicación
+web**, nombre `PWA Pedidos`:
+
+- *Orígenes autorizados de JavaScript*: `https://phinger.github.io`
+  — solo el dominio, sin barra final ni ruta.
+- *URI de redireccionamiento autorizados*: `https://phinger.github.io/pedidos/`
+  — **con la barra final**, match exacto con lo que manda la app.
+- Para probar en la compu, agregá `http://localhost:8000` y
+  `http://localhost:8000/`.
+
+**2.5 · Las credenciales.**
+
+| Valor | Dónde va | ¿Secreto? |
+|---|---|---|
+| Client ID | `docs/config.js`, en el repo | No, es público por diseño |
+| Client Secret | Solo en *Propiedades del script* | **Sí.** Nunca al repo |
+
+**Si falla:** `redirect_uri_mismatch` es casi siempre la barra final;
+`access_denied` es que ese Gmail no está en usuarios de prueba; y los cambios
+de URI tardan unos minutos en propagar.
 
 ### 3. Desplegar el Apps Script
 
