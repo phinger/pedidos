@@ -162,6 +162,9 @@ Es una **vista viva**, no una copia: está armada con una fórmula, así que los
 pedidos nuevos aparecen solos y desaparecen apenas el proceso de etiquetas les
 cambia el status. No hay que volver a ejecutar nada.
 
+Sirve para mirar desde la planilla. Para **imprimir** hace falta el archivo
+aparte que genera `exportarEtiquetas()` — ver abajo.
+
 Cada producto va en su propio renglón dentro de la celda de detalle, que en una
 etiqueta se lee bastante mejor que todo seguido:
 
@@ -175,9 +178,15 @@ Gimena    Almendras x3
 
 ### Cómo se imprime
 
-1. En la planilla, **Archivo → Descargar → Microsoft Excel (.xlsx)**. Si solo
-   querés la solapa de etiquetas, duplicá la planilla o copiá esas dos columnas
-   a un archivo aparte.
+La app de la impresora, al importar un Excel, lee **solo la primera solapa** del
+archivo. Exportar la planilla completa le entrega el catálogo de productos en
+vez de las etiquetas, y no hay forma de elegir otra solapa desde ahí. Por eso:
+
+1. Ejecutá **`exportarEtiquetas()`** desde el editor de Apps Script. Vuelca los
+   pendientes a una planilla aparte de una sola solapa, llamada *Etiquetas para
+   imprimir*. Siempre reutiliza el mismo archivo, así que el enlace no cambia y
+   conviene dejarlo a mano en el teléfono. Desde ahí, **Archivo → Descargar →
+   Microsoft Excel (.xlsx)**.
 2. Abrí la app **NIIMBOT** y emparejá la B1 por Bluetooth.
 3. Nueva etiqueta → tamaño **50 × 30 mm**.
 4. Menú de importación → **Excel** → elegí el archivo → mapeá `Nombre` al campo

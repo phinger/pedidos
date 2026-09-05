@@ -653,6 +653,74 @@ function prepararEtiquetas() {
   Logger.log('Es una vista viva: se actualiza sola, no hay que volver a ejecutar esto.');
 }
 
+/** Lee los pedidos pendientes y los devuelve como [[Nombre, Detalle], ...]. */
+function _filasEtiquetas() {
+  const pedidos = _hoja(CFG.HOJA_PEDIDOS);
+  const valores = pedidos.getDataRange().getValues();
+  if (valores.length < 2) return [];
+
+  const encabezados = valores[0].map(_normalizar);
+  const col = _mapearColumnas(encabezados, CFG.COLS_PEDIDOS);
+  const colStatus = _buscarColumna(encabezados, CFG.COL_STATUS);
+
+  if (col.nombre < 0 || col.detalle < 0 || colStatus < 0) {
+    throw _error('Para armar las etiquetas hacen falta las columnas nombre, detalle y ' +
+      'status en la solapa "' + CFG.HOJA_PEDIDOS + '".', 'SIN_CONFIG');
+  }
+
+  const filas = [];
+  const separador = new RegExp(CFG.SEPARADOR.replace(/[.*+?^{}()|[\]\\]/g, '\\$&'), 'g');
+
+  for (let i = 1; i < valores.length; i++) {
+    if (String(valores[i][colStatus] || '').trim() !== CFG.STATUS_INICIAL) continue;
+    filas.push([
+      String(valores[i][col.nombre] || ''),
+      String(valores[i][col.detalle] || '').replace(separador, '\n'),
+    ]);
+  }
+  return filas;
+}
+
+/**
+ * Vuelca los pedidos pendientes en una planilla aparte, de una sola solapa.
+ *
+ * Existe por una limitación de la app de la impresora: al importar un Excel
+ * lee únicamente la primera solapa del archivo, así que exportar la planilla
+ * completa le entrega el catálogo de productos en vez de las etiquetas.
+ *
+ * Reutiliza siempre el mismo archivo, así el enlace no cambia y se puede
+ * dejar a mano en el teléfono.
+ */
+function exportarEtiquetas() {
+  const filas = _filasEtiquetas();
+  const props = PropertiesService.getScriptProperties();
+
+  let archivo = null;
+  const idGuardado = props.getProperty('ID_ARCHIVO_ETIQUETAS');
+  if (idGuardado) {
+    try { archivo = SpreadsheetApp.openById(idGuardado); }
+    catch (e) { archivo = null; }        // lo borraron o le sacaron el permiso
+  }
+  if (!archivo) {
+    archivo = SpreadsheetApp.create('Etiquetas para imprimir');
+    props.setProperty('ID_ARCHIVO_ETIQUETAS', archivo.getId());
+  }
+
+  const hoja = archivo.getSheets()[0];
+  hoja.clear();
+  hoja.getRange(1, 1, 1, 2).setValues([['Nombre', 'Detalle']]).setFontWeight('bold');
+  if (filas.length) hoja.getRange(2, 1, filas.length, 2).setValues(filas);
+  hoja.setColumnWidth(1, 160);
+  hoja.setColumnWidth(2, 340);
+  SpreadsheetApp.flush();
+
+  Logger.log('%s pedido(s) en "%s" volcados a un archivo de una sola solapa.',
+    filas.length, CFG.STATUS_INICIAL);
+  Logger.log('Archivo: %s', archivo.getUrl());
+  Logger.log('Desde ahí: Archivo → Descargar → Excel, y ese .xlsx se importa en la NIIMBOT.');
+  return archivo.getUrl();
+}
+
 /**
  * Deja la planilla lista para la app. Es idempotente: si algo ya está bien,
  * no lo toca. Ejecutar a mano desde el editor, una sola vez.

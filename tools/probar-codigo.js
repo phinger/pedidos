@@ -108,6 +108,8 @@ class PlanillaFalsa {
   getSpreadsheetTimeZone() { return 'America/Argentina/Buenos_Aires'; }
   getSheetByName(n) { return this.hojas.find((h) => h.nombre === n) || null; }
   insertSheet(n) { const h = new HojaFalsa(n, [[]]); this.hojas.push(h); return h; }
+  getId() { return this.id || 'planilla-activa'; }
+  getUrl() { return 'https://docs.google.com/spreadsheets/d/' + this.getId(); }
   getSheets() { return this.hojas; }
 }
 
@@ -115,6 +117,7 @@ class PlanillaFalsa {
 
 function construirContexto({ hojas, respuestaToken }) {
   const planilla = new PlanillaFalsa(hojas);
+  const creadas = [];
   const props = new Map();
   const cache = new Map();
   const registro = [];
@@ -122,6 +125,7 @@ function construirContexto({ hojas, respuestaToken }) {
   const ctx = {
     console,
     planilla,
+    creadas,
     props,
     cache,
     registro,
@@ -130,6 +134,17 @@ function construirContexto({ hojas, respuestaToken }) {
       getActiveSpreadsheet: () => planilla,
       flush: () => {},
       WrapStrategy: { WRAP: 'wrap' },
+      create: (nombre) => {
+        const nueva = new PlanillaFalsa([new HojaFalsa('Hoja 1', [[]])]);
+        nueva.id = 'creada-' + nombre;
+        creadas.push(nueva);
+        return nueva;
+      },
+      openById: (id) => {
+        const hallada = creadas.find((p) => p.getId() === id);
+        if (!hallada) throw new Error('No existe: ' + id);
+        return hallada;
+      },
     },
     PropertiesService: {
       getScriptProperties: () => ({
@@ -656,6 +671,42 @@ probar('avisa si falta la columna de status', () => {
 
 probar('las letras de columna se calculan bien más allá de la Z', () => {
   igual([0, 25, 26, 27, 51, 52].map(ctx0._letraColumna), ['A', 'Z', 'AA', 'AB', 'AZ', 'BA']);
+});
+
+probar('exportarEtiquetas vuelca solo los pendientes a un archivo aparte', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  const token = login(ctx).token;
+  pedidoDe(ctx, token, 'Gimena', 'k1');
+  pedidoDe(ctx, token, 'Marcelo', 'k2');
+  hojas[1].datos[2][6] = 'Listo';        // el segundo ya no está pendiente
+
+  ctx.exportarEtiquetas();
+  igual(ctx.creadas.length, 1, 'debería haber creado un archivo');
+
+  const hoja = ctx.creadas[0].getSheets()[0];
+  igual(hoja.datos[0], ['Nombre', 'Detalle']);
+  igual(hoja.datos[1][0], 'Gimena');
+  igual(hoja.datos[1][1], 'Milanesa de soja x3\nPan integral x2',
+    'el detalle debería venir en renglones');
+  igual(hoja.getLastRow(), 2, 'el pedido que ya no está pendiente no debería aparecer');
+});
+
+probar('exportar dos veces reutiliza el mismo archivo', () => {
+  const { ctx } = nuevoEntorno();
+  const token = login(ctx).token;
+  pedidoDe(ctx, token, 'Gimena', 'k1');
+  const primera = ctx.exportarEtiquetas();
+  const segunda = ctx.exportarEtiquetas();
+  igual(segunda, primera, 'el enlace no debería cambiar');
+  igual(ctx.creadas.length, 1, 'no debería crear un archivo por corrida');
+});
+
+probar('exportar sin pendientes deja solo los encabezados', () => {
+  const { ctx } = nuevoEntorno();
+  login(ctx);
+  ctx.exportarEtiquetas();
+  igual(ctx.creadas[0].getSheets()[0].datos[0], ['Nombre', 'Detalle']);
+  igual(ctx.creadas[0].getSheets()[0].getLastRow(), 1);
 });
 
 console.log('\n' + (fallas === 0
