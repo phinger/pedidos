@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Pedidos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101114" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pedidos">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ── Arranque ─────────────────────────────────────────────────────────── -->
+<section class="pantalla" id="p-boot" data-activa>
+  <div class="centrado">
+    <div class="marca marca-grande" aria-hidden="true"></div>
+    <div class="spinner"></div>
+  </div>
+</section>
+
+<!-- ── Login ────────────────────────────────────────────────────────────── -->
+<section class="pantalla" id="p-login">
+  <div class="centrado centrado-ancho">
+    <div class="marca marca-grande" aria-hidden="true"></div>
+    <h1 class="titulo-hero">Pedidos</h1>
+    <p class="subtitulo">Ingresá con tu cuenta de Google para empezar a cargar pedidos.</p>
+
+    <button class="btn btn-google" id="btn-login">
+      <svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">
+        <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"/>
+        <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z"/>
+        <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z"/>
+        <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z"/>
+      </svg>
+      Continuar con Google
+    </button>
+
+    <button class="btn btn-texto" id="btn-ir-vincular">Tengo un código de vinculación</button>
+    <button class="btn btn-texto" id="btn-demo" hidden>Ver una demo sin cuenta</button>
+    <p class="nota" id="login-error" hidden></p>
+  </div>
+</section>
+
+<!-- ── Código de vinculación: se muestra si el login terminó fuera de la app ─ -->
+<section class="pantalla" id="p-codigo">
+  <div class="centrado centrado-ancho">
+    <div class="icono-info" aria-hidden="true">📱</div>
+    <h1 class="titulo">Un paso más</h1>
+    <p class="subtitulo">
+      Iniciaste sesión en Safari, pero el ícono del escritorio guarda sus datos aparte.
+      Abrí <strong>Pedidos</strong> desde el ícono, tocá <em>"Tengo un código"</em> y escribí:
+    </p>
+    <div class="codigo-display" id="codigo-vinculacion">— — — — — —</div>
+    <p class="nota">Vence en 10 minutos. Si se vence, volvé a iniciar sesión.</p>
+    <button class="btn btn-secundario" id="btn-seguir-aca">Seguir acá igual</button>
+  </div>
+</section>
+
+<!-- ── Ingreso del código de vinculación ────────────────────────────────── -->
+<section class="pantalla" id="p-vincular">
+  <div class="centrado centrado-ancho">
+    <h1 class="titulo">Código de vinculación</h1>
+    <p class="subtitulo">Escribí los 6 dígitos que quedaron en la pantalla de Safari.</p>
+    <input class="input-codigo" id="input-codigo" inputmode="numeric" autocomplete="one-time-code"
+           maxlength="6" placeholder="000000" aria-label="Código de 6 dígitos">
+    <button class="btn btn-primario" id="btn-vincular" disabled>Vincular</button>
+    <button class="btn btn-texto" id="btn-volver-login">Volver</button>
+    <p class="nota" id="vincular-error" hidden></p>
+  </div>
+</section>
+
+<!-- ── Pedido ───────────────────────────────────────────────────────────── -->
+<section class="pantalla pantalla-app" id="p-pedido">
+  <div class="cinta-demo" id="cinta-demo" hidden>Modo demo · nada de esto se guarda</div>
+  <header class="cabecera">
+    <div class="cabecera-fila">
+      <label class="campo-nombre">
+        <span class="campo-label">Nombre del pedido</span>
+        <input id="input-nombre" type="text" placeholder="¿Para quién es?"
+               autocomplete="off" autocapitalize="words" enterkeyhint="done"
+               list="nombres-recientes" aria-label="Nombre del pedido">
+      </label>
+      <button class="btn-icono" id="btn-menu" aria-label="Opciones">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
+        </svg>
+      </button>
+    </div>
+    <datalist id="nombres-recientes"></datalist>
+
+    <div class="buscador">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" class="buscador-lupa">
+        <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <input id="input-buscar" type="search" placeholder="Buscar producto" aria-label="Buscar producto"
+             autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
+      <button class="buscador-limpiar" id="btn-limpiar-busqueda" hidden aria-label="Limpiar búsqueda">✕</button>
+    </div>
+
+    <div class="chips" id="chips-categorias" role="tablist" aria-label="Categorías"></div>
+  </header>
+
+  <main class="lista" id="lista-productos" aria-live="polite"></main>
+
+  <div class="vacio" id="lista-vacia" hidden>
+    <p>No hay productos que coincidan.</p>
+    <button class="btn btn-texto" id="btn-reset-filtros">Ver todos</button>
+  </div>
+
+  <footer class="barra-inferior">
+    <button class="btn btn-primario btn-finalizar" id="btn-finalizar" disabled>
+      <span id="finalizar-texto">Finalizar</span>
+      <span class="badge" id="finalizar-badge" hidden>0</span>
+    </button>
+    <p class="barra-motivo" id="barra-motivo" hidden></p>
+  </footer>
+</section>
+
+<!-- ── Resumen (hoja inferior) ──────────────────────────────────────────── -->
+<div class="velo" id="velo" hidden></div>
+<section class="hoja" id="p-resumen" hidden aria-modal="true" role="dialog" aria-label="Resumen del pedido">
+  <div class="hoja-agarre" aria-hidden="true"></div>
+  <h2 class="hoja-titulo">Revisá el pedido</h2>
+  <p class="hoja-sub" id="resumen-nombre"></p>
+  <div class="resumen-lista" id="resumen-lista"></div>
+  <div class="resumen-total">
+    <span>Total</span>
+    <strong id="resumen-total">0 ítems</strong>
+  </div>
+  <button class="btn btn-primario" id="btn-confirmar">Confirmar pedido</button>
+  <button class="btn btn-texto" id="btn-volver-pedido">Seguir editando</button>
+  <p class="nota nota-error" id="resumen-error" hidden></p>
+</section>
+
+<!-- ── Éxito ────────────────────────────────────────────────────────────── -->
+<section class="pantalla" id="p-exito">
+  <div class="centrado centrado-ancho">
+    <div class="tilde" aria-hidden="true">
+      <svg viewBox="0 0 52 52" width="72" height="72">
+        <circle cx="26" cy="26" r="24" fill="none" stroke="currentColor" stroke-width="3" class="tilde-circulo"/>
+        <path d="M15 27l8 8 15-16" fill="none" stroke="currentColor" stroke-width="4"
+              stroke-linecap="round" stroke-linejoin="round" class="tilde-check"/>
+      </svg>
+    </div>
+    <h1 class="titulo">Pedido enviado</h1>
+    <p class="subtitulo" id="exito-detalle"></p>
+    <div class="pedido-id" id="exito-id"></div>
+    <button class="btn btn-primario" id="btn-nuevo">Nuevo pedido</button>
+  </div>
+</section>
+
+<!-- ── Menú de opciones ─────────────────────────────────────────────────── -->
+<section class="hoja" id="p-menu" hidden aria-modal="true" role="dialog" aria-label="Opciones">
+  <div class="hoja-agarre" aria-hidden="true"></div>
+  <p class="menu-usuario" id="menu-usuario"></p>
+  <button class="btn btn-secundario" id="btn-refrescar">Actualizar catálogo</button>
+  <button class="btn btn-secundario" id="btn-vaciar">Vaciar pedido</button>
+  <button class="btn btn-texto btn-peligro" id="btn-salir">Cerrar sesión</button>
+  <button class="btn btn-texto" id="btn-cerrar-menu">Cancelar</button>
+</section>
+
+<div class="aviso" id="aviso" hidden role="status"></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
