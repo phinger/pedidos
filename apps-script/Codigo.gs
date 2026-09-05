@@ -14,6 +14,11 @@
    la función probarEstructura() desde el editor y mirar el registro.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* Se sube a mano con cada cambio que haya que publicar. doGet lo devuelve, así
+   que abriendo la URL /exec en el navegador se ve qué versión está realmente
+   publicada — que no es lo mismo que la que muestra el editor. */
+const VERSION_API = 3;
+
 const CFG = {
   /* ── Solapas ──────────────────────────────────────────────────────── */
   HOJA_PRODUCTOS: 'Lista de Productos',
@@ -74,7 +79,7 @@ const CFG = {
    ═══════════════════════════════════════════════════════════════════════ */
 
 function doGet() {
-  return _salida({ ok: true, servicio: 'pedidos' });
+  return _salida({ ok: true, servicio: 'pedidos', version: VERSION_API });
 }
 
 function doPost(e) {
@@ -94,7 +99,11 @@ function doPost(e) {
     if (accion === 'deshacer')   return _salida(_deshacerUltimoLote());
     if (accion === 'estructura') return _salida(accionEstructura());
 
-    throw _error('Acción desconocida: ' + accion, 'ACCION_INVALIDA');
+    /* Casi siempre significa que el código está guardado pero no publicado:
+       el web app sirve una versión congelada hasta que se implementa una nueva. */
+    throw _error('El servidor no conoce la acción "' + accion + '". Publicá una versión ' +
+      'nueva del Apps Script (Implementar → Administrar implementaciones → Nueva versión). ' +
+      'Versión publicada: ' + VERSION_API + '.', 'ACCION_INVALIDA');
   } catch (err) {
     return _salida({
       ok: false,

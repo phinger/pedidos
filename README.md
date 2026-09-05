@@ -263,8 +263,15 @@ El **modo demo** (`?demo=1`) levanta un catálogo falso y no escribe en ninguna
 planilla: sirve para revisar el diseño en el teléfono antes de tener Google
 configurado.
 
-Al publicar cambios en `docs/`, subí `VERSION` en `sw.js` para que el service
-worker invalide el caché viejo.
+Al publicar cambios en `docs/`, subí `VERSION` en `sw.js` y el `?v=` de
+`index.html` para que el service worker invalide el caché viejo.
+
+**Al cambiar `Codigo.gs`, guardar no alcanza.** El web app sirve una versión
+congelada: hay que ir a *Implementar → Administrar implementaciones → ✏️ →
+Versión: Nueva → Implementar*. La URL `/exec` no cambia. Para verificar qué
+está realmente publicado, abrí la URL `/exec` en el navegador: devuelve
+`{"ok":true,"servicio":"pedidos","version":N}`, donde `N` es `VERSION_API` del
+código. Si no aparece `version`, lo publicado es anterior a este mecanismo.
 
 ## Decisiones que conviene conocer
 
