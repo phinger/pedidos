@@ -152,6 +152,48 @@ Después entrá siempre por el ícono.
 
 ---
 
+## Etiquetas en la Niimbot B1
+
+La solapa **`Etiquetas`** muestra el `Nombre` y el `Detalle` de los pedidos que
+están en `Pendiente`, listos para imprimir. Se crea ejecutando
+**`prepararEtiquetas()`** una vez desde el editor de Apps Script.
+
+Es una **vista viva**, no una copia: está armada con una fórmula, así que los
+pedidos nuevos aparecen solos y desaparecen apenas el proceso de etiquetas les
+cambia el status. No hay que volver a ejecutar nada.
+
+Cada producto va en su propio renglón dentro de la celda de detalle, que en una
+etiqueta se lee bastante mejor que todo seguido:
+
+```
+Nombre    Detalle
+────────  ────────────────────
+Gimena    Almendras x3
+          Aceite de Coco x1
+          Pan integral x2
+```
+
+### Cómo se imprime
+
+1. En la planilla, **Archivo → Descargar → Microsoft Excel (.xlsx)**. Si solo
+   querés la solapa de etiquetas, duplicá la planilla o copiá esas dos columnas
+   a un archivo aparte.
+2. Abrí la app **NIIMBOT** y emparejá la B1 por Bluetooth.
+3. Nueva etiqueta → tamaño **50 × 30 mm**.
+4. Menú de importación → **Excel** → elegí el archivo → mapeá `Nombre` al campo
+   grande y `Detalle` al chico.
+5. Imprimir lote.
+
+Una plantilla que funciona bien en 50 × 30: el nombre arriba en negrita a unos
+5–6 mm de alto, y el detalle abajo en cuerpo chico, que entra cómodo hasta 4 o 5
+renglones. La B1 imprime 48 mm de ancho útil a 203 dpi.
+
+> Si la app de la impresora aplastara los saltos de línea al importar, cambiá
+> `CHAR(10)` por `"; "` en la fórmula de `Etiquetas!A2` y el detalle vuelve a
+> una sola línea.
+
+---
+
 ## El login en iOS
 
 El popup de Google Sign-In está roto en las PWA instaladas en iOS: desde la

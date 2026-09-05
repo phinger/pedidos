@@ -19,6 +19,7 @@ const CFG = {
   HOJA_PRODUCTOS: 'Lista de Productos',
   HOJA_PEDIDOS:   'Pedidos',
   HOJA_USUARIOS:  'Usuarios',        // allowlist: una columna de emails
+  HOJA_ETIQUETAS: 'Etiquetas',       // vista para imprimir en la Niimbot B1
 
   /* ── Encabezados ──────────────────────────────────────────────────────
      Cada campo lista los nombres de columna aceptados. La comparación
@@ -60,6 +61,7 @@ const CFG = {
   MAX_ITEMS:    300,
   MAX_CANTIDAD: 999,
   HORA_FORMATO: 'HH:mm',
+  SEPARADOR:    '; ',                // entre productos dentro de "Detalle"
 };
 
 
@@ -303,6 +305,18 @@ function _buscarColumna(encabezados, alias) {
   return -1;
 }
 
+/** Índice 0 → "A", 25 → "Z", 26 → "AA". Para armar fórmulas. */
+function _letraColumna(indice) {
+  let n = indice + 1;
+  let letra = '';
+  while (n > 0) {
+    const resto = (n - 1) % 26;
+    letra = String.fromCharCode(65 + resto) + letra;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letra;
+}
+
 function _mapearColumnas(encabezados, definicion) {
   const mapa = {};
   for (const campo in definicion) {
@@ -451,7 +465,7 @@ function accionPedido(p, sesion) {
       Utilities.formatDate(ahora, zona, 'yyyy/MM/dd') + ' 00:00:00');
     aEscribir[col.hora] = Utilities.formatDate(ahora, zona, CFG.HORA_FORMATO);
     aEscribir[col.nombre] = nombre;
-    aEscribir[col.detalle] = lineas.join('; ');
+    aEscribir[col.detalle] = lineas.join(CFG.SEPARADOR);
     if (col.total >= 0) aEscribir[col.total] = total;
     if (col.email >= 0) aEscribir[col.email] = sesion.email;
 
@@ -578,6 +592,65 @@ function probarEstructura() {
           : '⚠️ NO ENCONTRADA');
       }
     });
+}
+
+/**
+ * Crea (o rehace) la solapa de etiquetas: Nombre y Detalle de los pedidos que
+ * están en estado inicial, listos para imprimir en la Niimbot B1.
+ *
+ * Es una vista viva, no una copia: se arma con una fórmula, así que se
+ * actualiza sola a medida que entran pedidos y a medida que el otro proceso
+ * les cambia el status. Un pedido desaparece de acá apenas deja de estar
+ * pendiente.
+ *
+ * Cada producto va en su propio renglón dentro de la celda, que en una
+ * etiqueta se lee mucho mejor que todo seguido. Si la app de la impresora
+ * aplastara los saltos de línea, cambiar CHAR(10) por "; " en la fórmula.
+ */
+function prepararEtiquetas() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const pedidos = _hoja(CFG.HOJA_PEDIDOS);
+
+  const encabezados = pedidos.getRange(1, 1, 1, Math.max(1, pedidos.getLastColumn()))
+    .getValues()[0].map(_normalizar);
+  const col = _mapearColumnas(encabezados, CFG.COLS_PEDIDOS);
+  const colStatus = _buscarColumna(encabezados, CFG.COL_STATUS);
+
+  if (col.nombre < 0 || col.detalle < 0 || colStatus < 0) {
+    throw _error('Para armar las etiquetas hacen falta las columnas nombre, detalle y ' +
+      'status en la solapa "' + CFG.HOJA_PEDIDOS + '".', 'SIN_CONFIG');
+  }
+
+  const ref = "'" + CFG.HOJA_PEDIDOS.replace(/'/g, "''") + "'!";
+  const rango = function (indice) {
+    const l = _letraColumna(indice);
+    return ref + l + '2:' + l;
+  };
+
+  const formula =
+    '=IFERROR(QUERY({' +
+      rango(col.nombre) + ',' +
+      'ARRAYFORMULA(SUBSTITUTE(' + rango(col.detalle) + ',"' + CFG.SEPARADOR + '",CHAR(10)))' + ',' +
+      rango(colStatus) +
+    '},"select Col1, Col2 where Col3 = ' + "'" + CFG.STATUS_INICIAL + "'" + '",0),"")';
+
+  let hoja = ss.getSheetByName(CFG.HOJA_ETIQUETAS);
+  if (!hoja) hoja = ss.insertSheet(CFG.HOJA_ETIQUETAS);
+  hoja.clear();
+
+  hoja.getRange(1, 1, 1, 2).setValues([['Nombre', 'Detalle']]).setFontWeight('bold');
+  hoja.getRange(2, 1).setFormula(formula);
+  hoja.setFrozenRows(1);
+  hoja.setColumnWidth(1, 160);
+  hoja.setColumnWidth(2, 340);
+  hoja.getRange('A:B').setVerticalAlignment('top');
+  hoja.getRange('B:B').setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+  SpreadsheetApp.flush();
+
+  const cuantos = Math.max(0, hoja.getLastRow() - 1);
+  Logger.log('Solapa "%s" lista: %s pedido(s) en "%s".',
+    CFG.HOJA_ETIQUETAS, cuantos, CFG.STATUS_INICIAL);
+  Logger.log('Es una vista viva: se actualiza sola, no hay que volver a ejecutar esto.');
 }
 
 /**

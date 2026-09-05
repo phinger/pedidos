@@ -43,6 +43,7 @@ class HojaFalsa {
   }
   getLastColumn() { return this.datos[0] ? this.datos[0].length : 0; }
   setFrozenRows() { return this; }
+  clear() { this.datos = [[]]; this.formulas = {}; return this; }
   setColumnWidth() { return this; }
   insertRowBefore(fila) {
     const ancho = this.datos[0] ? this.datos[0].length : 0;
@@ -55,7 +56,8 @@ class HojaFalsa {
     /* Forma "B:B": solo se usa para dar formato, no hace falta simularla. */
     if (typeof fila === 'string') {
       return { setNumberFormat() { return this; }, setValues() { return this; },
-               setFontWeight() { return this; }, getValues: () => [[]] };
+               setFontWeight() { return this; }, setVerticalAlignment() { return this; },
+               setWrapStrategy() { return this; }, getValues: () => [[]] };
     }
     return {
       getValues() {
@@ -81,6 +83,13 @@ class HojaFalsa {
       },
       setFontWeight() { return this; },
       setNumberFormat() { return this; },
+      setVerticalAlignment() { return this; },
+      setWrapStrategy() { return this; },
+      setFormula(f) {
+        hoja.formulas = hoja.formulas || {};
+        hoja.formulas[fila + ':' + col] = f;
+        return this;
+      },
       setValue(v) {
         hoja._asegurarFila(fila);
         hoja.datos[fila - 1][col - 1] = v;
@@ -98,6 +107,7 @@ class PlanillaFalsa {
   getName() { return 'Planilla de prueba'; }
   getSpreadsheetTimeZone() { return 'America/Argentina/Buenos_Aires'; }
   getSheetByName(n) { return this.hojas.find((h) => h.nombre === n) || null; }
+  insertSheet(n) { const h = new HojaFalsa(n, [[]]); this.hojas.push(h); return h; }
   getSheets() { return this.hojas; }
 }
 
@@ -119,6 +129,7 @@ function construirContexto({ hojas, respuestaToken }) {
     SpreadsheetApp: {
       getActiveSpreadsheet: () => planilla,
       flush: () => {},
+      WrapStrategy: { WRAP: 'wrap' },
     },
     PropertiesService: {
       getScriptProperties: () => ({
@@ -234,6 +245,8 @@ const login = (ctx) =>
   llamar(ctx, { accion: 'login', code: 'abc', code_verifier: 'v', redirect_uri: 'https://x/y/' });
 
 /* ── Corrida ─────────────────────────────────────────────────────────── */
+
+const ctx0 = nuevoEntorno().ctx;   // contexto suelto, para probar helpers
 
 let ok = 0, fallas = 0;
 function probar(nombre, fn) {
@@ -595,6 +608,54 @@ probar('prepararPlanilla se puede correr dos veces sin romper nada', () => {
   igual(hojas[2].datos[0], ['Email', 'Activo'], 'no debería duplicar encabezados');
   igual(hojas[1].getLastRow(), 2, 'no debería tocar los pedidos ya cargados');
   afirmar(llamar(ctx, { accion: 'productos', token }).ok, 'la sesión sigue viva');
+});
+
+console.log('\nEtiquetas');
+
+probar('crea la solapa apuntando a las columnas correctas', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  ctx.prepararEtiquetas();
+
+  const etiquetas = hojas.find((h) => h.nombre === 'Etiquetas');
+  afirmar(etiquetas, 'debería haber creado la solapa Etiquetas');
+  igual(etiquetas.datos[0], ['Nombre', 'Detalle']);
+
+  const formula = etiquetas.formulas['2:1'];
+  afirmar(formula.indexOf("'Pedidos'!D2:D") >= 0, 'debería leer Nombre de la columna D: ' + formula);
+  afirmar(formula.indexOf("'Pedidos'!E2:E") >= 0, 'debería leer Detalle de la columna E');
+  afirmar(formula.indexOf("'Pedidos'!G2:G") >= 0, 'debería filtrar por la columna G (Status)');
+  afirmar(formula.indexOf("Col3 = 'Pendiente'") >= 0, 'debería filtrar por Pendiente');
+  afirmar(formula.indexOf('CHAR(10)') >= 0, 'debería partir el detalle en renglones');
+});
+
+probar('sigue las columnas aunque estén en otro orden', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  hojas[1].datos[0] = ['Status', 'ID', 'Fecha', 'Hora', 'Detalle', 'Nombre', 'Total', 'Email'];
+  ctx.prepararEtiquetas();
+
+  const formula = hojas.find((h) => h.nombre === 'Etiquetas').formulas['2:1'];
+  afirmar(formula.indexOf("'Pedidos'!F2:F") >= 0, 'Nombre está ahora en F: ' + formula);
+  afirmar(formula.indexOf("'Pedidos'!E2:E") >= 0, 'Detalle sigue en E');
+  afirmar(formula.indexOf("'Pedidos'!A2:A") >= 0, 'Status está ahora en A');
+});
+
+probar('rehacerla no duplica la solapa', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  ctx.prepararEtiquetas();
+  ctx.prepararEtiquetas();
+  igual(hojas.filter((h) => h.nombre === 'Etiquetas').length, 1);
+});
+
+probar('avisa si falta la columna de status', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  hojas[1].datos[0] = ['ID', 'Fecha', 'Hora', 'Nombre', 'Detalle', 'Total', 'Email'];
+  let mensaje = '';
+  try { ctx.prepararEtiquetas(); } catch (e) { mensaje = e.message; }
+  afirmar(/status/.test(mensaje), 'debería explicar qué columna falta: ' + mensaje);
+});
+
+probar('las letras de columna se calculan bien más allá de la Z', () => {
+  igual([0, 25, 26, 27, 51, 52].map(ctx0._letraColumna), ['A', 'Z', 'AA', 'AB', 'AZ', 'BA']);
 });
 
 console.log('\n' + (fallas === 0
