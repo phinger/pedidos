@@ -1,6 +1,6 @@
 /* Service worker: deja la app abriendo instantánea.
    Al publicar cambios, subir VERSION para invalidar el caché. */
-const VERSION = 'pedidos-v5';
+const VERSION = 'pedidos-v6';
 
 const RECURSOS = [
   './',
@@ -32,33 +32,21 @@ self.addEventListener('fetch', (e) => {
   /* La API y el login de Google nunca se cachean. */
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
 
-  /* Navegación: red primero para tomar versiones nuevas; si no hay señal, caché. */
-  if (e.request.mode === 'navigate') {
-    e.respondWith(
-      fetch(e.request)
-        .then((r) => {
-          const copia = r.clone();
-          caches.open(VERSION).then((c) => c.put('./index.html', copia));
-          return r;
-        })
-        .catch(() => caches.match('./index.html'))
-    );
-    return;
-  }
-
-  /* Estáticos: caché primero, y se refresca en segundo plano. */
+  /* Red primero, caché como red de contención.
+     Al revés —caché primero— un cambio publicado tardaba dos aperturas en
+     verse: la primera servía lo viejo y recién ahí refrescaba. Con la app ya
+     instalada eso es muy confuso. La caída a caché mantiene el arranque
+     offline. */
   e.respondWith(
-    caches.match(e.request).then((cacheado) => {
-      const red = fetch(e.request)
-        .then((r) => {
-          if (r && r.status === 200) {
-            const copia = r.clone();
-            caches.open(VERSION).then((c) => c.put(e.request, copia));
-          }
-          return r;
-        })
-        .catch(() => cacheado);
-      return cacheado || red;
-    })
+    fetch(e.request)
+      .then((respuesta) => {
+        if (respuesta && respuesta.status === 200) {
+          const copia = respuesta.clone();
+          caches.open(VERSION).then((c) => c.put(
+            e.request.mode === 'navigate' ? './index.html' : e.request, copia));
+        }
+        return respuesta;
+      })
+      .catch(() => caches.match(e.request.mode === 'navigate' ? './index.html' : e.request))
   );
 });

@@ -155,7 +155,10 @@ button { cursor: pointer; touch-action: manipulation; }
   font-size: 12px; font-weight: 650; letter-spacing: .03em;
   text-align: center;
 }
-.cinta-demo + .cabecera { padding-top: 10px; }
+/* Solo cuando la cinta se ve: el elemento está siempre en el DOM y este
+   selector le comía la safe area a la cabecera, tapándola con la barra
+   de estado del iPhone. */
+.cinta-demo:not([hidden]) + .cabecera { padding-top: 10px; }
 
 /* ── Cabecera del pedido ─────────────────────────────────────────────── */
 
@@ -391,7 +394,33 @@ button { cursor: pointer; touch-action: manipulation; }
   font-size: 17px;
 }
 
-.menu-usuario { margin: 0 0 4px; color: var(--tenue); font-size: 14px; text-align: center; }
+.menu-usuario {
+  margin: 0 0 2px;
+  color: var(--tenue);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* El menú va como lista, no como pila de botones: ocupaba media pantalla. */
+#p-menu { gap: 0; padding-bottom: calc(10px + var(--seg-bottom)); }
+
+.menu-opcion {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 4px;
+  border: 0; border-radius: 0;
+  border-top: 1px solid var(--borde);
+  background: none;
+  color: var(--texto);
+  font-weight: 500;
+  text-align: left;
+  transition: background .12s ease;
+}
+.menu-opcion:first-of-type { margin-top: 6px; }
+.menu-opcion:active { background: var(--superficie-2); }
+.menu-opcion .emoji { width: 22px; font-size: 17px; text-align: center; }
+.menu-opcion.peligro { color: var(--peligro); }
 
 /* ── Vinculación ─────────────────────────────────────────────────────── */
 

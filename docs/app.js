@@ -689,7 +689,6 @@ function conectarEventos() {
     $('#menu-usuario').textContent = u ? u.email : '';
     abrirHoja('#p-menu');
   };
-  $('#btn-cerrar-menu').onclick = cerrarHojas;
   $('#btn-refrescar').onclick = () => { cerrarHojas(); refrescarCatalogo(true); };
   $('#btn-vaciar').onclick = () => { cerrarHojas(); vaciarPedido(); aviso('Pedido vaciado'); };
   $('#btn-salir').onclick = () => cerrarSesion(false);
