@@ -113,6 +113,7 @@ function cerrarHojas() {
   $('#velo').hidden = true;
   $('#p-resumen').hidden = true;
   $('#p-menu').hidden = true;
+  $('#p-etiquetas').hidden = true;
 }
 
 /* ── API ─────────────────────────────────────────────────────────────── */
@@ -639,6 +640,56 @@ async function confirmar() {
   }
 }
 
+/* ── Etiquetas ───────────────────────────────────────────────────────── */
+
+/* Genera el archivo imprimible con los pedidos pendientes y los saca de la
+   cola. Vive acá y no solo en el editor de Apps Script porque es una tarea
+   diaria y se hace desde el teléfono. */
+async function generarEtiquetas() {
+  cerrarHojas();
+  aviso('Generando etiquetas…');
+  try {
+    const r = await api('etiquetas');
+    mostrarResultadoEtiquetas(r);
+  } catch (e) {
+    if (e.codigo === 'SIN_AUTORIZACION') return;
+    aviso(e.red ? 'Sin conexión' : e.message);
+  }
+}
+
+function mostrarResultadoEtiquetas(r) {
+  const hayAlgo = r.cantidad > 0;
+  $('#etiquetas-titulo').textContent = hayAlgo ? 'Etiquetas listas' : 'No hay nada nuevo';
+  $('#etiquetas-detalle').textContent = hayAlgo
+    ? r.cantidad + (r.cantidad === 1 ? ' pedido pasó a impreso.' : ' pedidos pasaron a impresos.') +
+      ' Descargalo como Excel e importalo en la NIIMBOT.'
+    : 'Todos los pedidos pendientes ya se imprimieron.';
+
+  $('#btn-abrir-archivo').href = r.url || '#';
+  $('#btn-abrir-archivo').hidden = !r.url;
+  $('#btn-deshacer-etiquetas').hidden = !hayAlgo;
+  $('#etiquetas-error').hidden = true;
+  abrirHoja('#p-etiquetas');
+}
+
+async function deshacerEtiquetas() {
+  const boton = $('#btn-deshacer-etiquetas');
+  boton.disabled = true;
+  try {
+    const r = await api('deshacer');
+    cerrarHojas();
+    aviso(r.cantidad
+      ? r.cantidad + (r.cantidad === 1 ? ' pedido volvió a la cola' : ' pedidos volvieron a la cola')
+      : 'No había nada para deshacer');
+  } catch (e) {
+    const err = $('#etiquetas-error');
+    err.textContent = e.red ? 'Sin conexión. Probá de nuevo.' : e.message;
+    err.hidden = false;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
 /* ── Eventos ─────────────────────────────────────────────────────────── */
 
 function conectarEventos() {
@@ -689,9 +740,12 @@ function conectarEventos() {
     const u = estado.usuario;
     /* La versión sirve para saber de un vistazo si el teléfono está corriendo
        el build que se acaba de publicar. */
-    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v7';
+    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v8';
     abrirHoja('#p-menu');
   };
+  $('#btn-etiquetas').onclick = generarEtiquetas;
+  $('#btn-deshacer-etiquetas').onclick = deshacerEtiquetas;
+  $('#btn-cerrar-etiquetas').onclick = cerrarHojas;
   $('#btn-refrescar').onclick = () => { cerrarHojas(); refrescarCatalogo(true); };
   $('#btn-vaciar').onclick = () => { cerrarHojas(); vaciarPedido(); aviso('Pedido vaciado'); };
   $('#btn-salir').onclick = () => cerrarSesion(false);

@@ -682,83 +682,111 @@ probar('las letras de columna se calculan bien más allá de la Z', () => {
   igual([0, 25, 26, 27, 51, 52].map(ctx0._letraColumna), ['A', 'Z', 'AA', 'AB', 'AZ', 'BA']);
 });
 
-probar('exporta solo los pendientes y los marca como impresos', () => {
+probar('exporta los pendientes y los pasa a Impreso', () => {
   const { ctx, hojas } = nuevoEntorno();
   const token = login(ctx).token;
   pedidoDe(ctx, token, 'Gimena', 'k1');
   pedidoDe(ctx, token, 'Marcelo', 'k2');
   hojas[1].datos[2][6] = 'Listo';        // el segundo ya no está pendiente
 
-  ctx.exportarEtiquetas();
+  const r = ctx._exportarEtiquetas();
+  igual(r.cantidad, 1);
+  igual(r.ids, ['P-0001']);
+
   const hoja = ctx.creadas[0].getSheets()[0];
   igual(hoja.datos[0], ['Nombre', 'Detalle']);
   igual(hoja.datos[1][0], 'Gimena');
   igual(hoja.datos[1][1], 'Milanesa de soja x3\nPan integral x2',
     'el detalle debería venir en renglones');
-  igual(hoja.getLastRow(), 2, 'el que ya no está pendiente no debería salir');
 
-  const colImpreso = 8;   // 0-based: se agrega después de Email
-  afirmar(hojas[1].datos[1][colImpreso], 'el pedido exportado debería quedar marcado');
+  igual(hojas[1].datos[1][6], 'Impreso', 'el status debería haber cambiado');
+  igual(hojas[1].datos[2][6], 'Listo', 'el otro pedido no se toca');
+  igual(hojas[1].datos[1].length, 8, 'no debería agregar ninguna columna');
 });
 
 probar('exportar de nuevo no reimprime lo ya impreso', () => {
-  const { ctx, hojas } = nuevoEntorno();
+  const { ctx } = nuevoEntorno();
   const token = login(ctx).token;
   pedidoDe(ctx, token, 'Gimena', 'k1');
 
-  ctx.exportarEtiquetas();
-  igual(ctx.creadas[0].getSheets()[0].getLastRow(), 2, 'primera corrida: un pedido');
-
-  ctx.exportarEtiquetas();
-  igual(ctx.creadas[0].getSheets()[0].getLastRow(), 1,
-    'segunda corrida: solo encabezados, no hay nada nuevo');
+  igual(ctx._exportarEtiquetas().cantidad, 1, 'primera corrida');
+  igual(ctx._exportarEtiquetas().cantidad, 0, 'segunda corrida: nada nuevo');
+  igual(ctx.creadas[0].getSheets()[0].getLastRow(), 1, 'el archivo queda con solo encabezados');
 
   pedidoDe(ctx, token, 'Marcelo', 'k2');
-  ctx.exportarEtiquetas();
-  const hoja = ctx.creadas[0].getSheets()[0];
-  igual(hoja.getLastRow(), 2, 'tercera corrida: solo el pedido nuevo');
-  igual(hoja.datos[1][0], 'Marcelo');
+  const tercera = ctx._exportarEtiquetas();
+  igual(tercera.cantidad, 1, 'tercera corrida: solo el pedido nuevo');
+  igual(ctx.creadas[0].getSheets()[0].datos[1][0], 'Marcelo');
 });
 
-probar('deshacerUltimoLote devuelve los pedidos a la cola', () => {
+probar('deshacer devuelve el lote al estado pendiente', () => {
   const { ctx, hojas } = nuevoEntorno();
   const token = login(ctx).token;
   pedidoDe(ctx, token, 'Gimena', 'k1');
 
-  ctx.exportarEtiquetas();
-  ctx.deshacerUltimoLote();
-  igual(hojas[1].datos[1][8], '', 'la marca debería haberse borrado');
+  ctx._exportarEtiquetas();
+  igual(hojas[1].datos[1][6], 'Impreso');
 
-  ctx.exportarEtiquetas();
-  igual(ctx.creadas[0].getSheets()[0].datos[1][0], 'Gimena', 'debería volver a salir');
+  igual(ctx._deshacerUltimoLote().cantidad, 1);
+  igual(hojas[1].datos[1][6], 'Pendiente', 'debería volver a pendiente');
+  igual(ctx._exportarEtiquetas().cantidad, 1, 'y volver a salir en la próxima');
 });
 
 probar('deshacer dos veces no rompe nada', () => {
   const { ctx } = nuevoEntorno();
   const token = login(ctx).token;
   pedidoDe(ctx, token, 'Gimena', 'k1');
-  ctx.exportarEtiquetas();
-  ctx.deshacerUltimoLote();
-  ctx.deshacerUltimoLote();
-  igual(ctx.registro[ctx.registro.length - 1], 'No hay ningún lote para deshacer.');
+  ctx._exportarEtiquetas();
+  ctx._deshacerUltimoLote();
+  igual(ctx._deshacerUltimoLote(), { ok: true, cantidad: 0, vacio: true });
+});
+
+probar('deshacer no toca una fila cuyo ID ya no coincide', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  const token = login(ctx).token;
+  pedidoDe(ctx, token, 'Gimena', 'k1');
+  ctx._exportarEtiquetas();
+  hojas[1].datos[1][0] = 'P-9999';        // alguien reordenó las filas
+  igual(ctx._deshacerUltimoLote().cantidad, 0, 'no debería tocar nada');
+  igual(hojas[1].datos[1][6], 'Impreso', 'el status queda como estaba');
 });
 
 probar('exportar dos veces reutiliza el mismo archivo', () => {
   const { ctx } = nuevoEntorno();
   const token = login(ctx).token;
   pedidoDe(ctx, token, 'Gimena', 'k1');
-  const primera = ctx.exportarEtiquetas();
-  const segunda = ctx.exportarEtiquetas();
+  const primera = ctx._exportarEtiquetas().url;
+  const segunda = ctx._exportarEtiquetas().url;
   igual(segunda, primera, 'el enlace no debería cambiar');
   igual(ctx.creadas.length, 1, 'no debería crear un archivo por corrida');
 });
 
-probar('la vista viva también excluye lo impreso', () => {
+probar('la app puede generar etiquetas con su sesión', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  const token = login(ctx).token;
+  pedidoDe(ctx, token, 'Gimena', 'k1');
+
+  const r = llamar(ctx, { accion: 'etiquetas', token });
+  igual([r.ok, r.cantidad], [true, 1]);
+  afirmar(r.url, 'debería devolver el enlace del archivo');
+  igual(hojas[1].datos[1][6], 'Impreso');
+
+  igual(llamar(ctx, { accion: 'deshacer', token }).cantidad, 1);
+  igual(hojas[1].datos[1][6], 'Pendiente');
+});
+
+probar('generar etiquetas sin sesión válida se rechaza', () => {
+  const { ctx } = nuevoEntorno();
+  igual(llamar(ctx, { accion: 'etiquetas', token: '' }).codigo, 'SIN_AUTORIZACION');
+  igual(llamar(ctx, { accion: 'deshacer', token: 'x'.repeat(64) }).codigo, 'SIN_AUTORIZACION');
+});
+
+probar('la vista viva filtra solo por status', () => {
   const { ctx, hojas } = nuevoEntorno();
   ctx.prepararEtiquetas();
   const formula = hojas.find((h) => h.nombre === 'Etiquetas').formulas['2:1'];
   afirmar(formula.indexOf('="Pendiente"') >= 0, 'debería filtrar por Pendiente: ' + formula);
-  afirmar(formula.indexOf('I2:I=""') >= 0, 'debería excluir los que tienen fecha de impresión');
+  afirmar(formula.indexOf('I2:I') < 0, 'ya no debería mirar ninguna columna extra');
 });
 
 console.log('\n' + (fallas === 0

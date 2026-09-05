@@ -182,11 +182,12 @@ La app de la impresora, al importar un Excel, lee **solo la primera solapa** del
 archivo. Exportar la planilla completa le entrega el catálogo de productos en
 vez de las etiquetas, y no hay forma de elegir otra solapa desde ahí. Por eso:
 
-1. Ejecutá **`exportarEtiquetas()`** desde el editor de Apps Script. Vuelca los
-   pendientes sin imprimir a una planilla aparte de una sola solapa, llamada
-   *Etiquetas para imprimir*, y los marca como impresos. Siempre reutiliza el
-   mismo archivo, así que el enlace no cambia y conviene dejarlo a mano en el
-   teléfono. Desde ahí, **Archivo → Descargar → Microsoft Excel (.xlsx)**.
+1. En la app, **⋮ → Generar etiquetas**. Vuelca los pendientes a una planilla
+   aparte de una sola solapa —*Etiquetas para imprimir*— y los pasa a `Impreso`.
+   Siempre reutiliza el mismo archivo, así que el enlace no cambia. Tocá
+   **Abrir el archivo** y ahí: **Archivo → Descargar → Microsoft Excel
+   (.xlsx)**. También se puede ejecutar `exportarEtiquetas()` a mano desde el
+   editor de Apps Script.
 2. Abrí la app **NIIMBOT** y emparejá la B1 por Bluetooth.
 3. Nueva etiqueta → tamaño **50 × 30 mm**.
 4. Menú de importación → **Excel** → elegí el archivo → mapeá `Nombre` al campo
@@ -203,25 +204,26 @@ renglones. La B1 imprime 48 mm de ancho útil a 203 dpi.
 
 ### Qué ya se imprimió
 
-La columna **`Impreso`** de la solapa `Pedidos` guarda la fecha y hora en que
-cada pedido salió. La crea el script solo, la primera vez que hace falta.
+El registro es la propia columna **`Status`**: al generar las etiquetas, cada
+pedido pasa de `Pendiente` a `Impreso` y con eso sale de la cola. El valor sale
+de `CFG.STATUS_IMPRESO` en `Codigo.gs`.
 
-Ese es el registro; **el archivo de la impresora es descartable** y se puede
-sobrescribir cuando se quiera. Cada corrida de `exportarEtiquetas()` trae
-únicamente lo que entró desde la anterior, así que ejecutarla de más nunca
-reimprime nada: como mucho devuelve un archivo con solo los encabezados.
+**El archivo de la impresora es descartable** y se puede sobrescribir cuando se
+quiera. Cada corrida trae únicamente lo que entró desde la anterior, así que
+generar de más nunca reimprime nada: como mucho devuelve un archivo con solo
+los encabezados.
 
 Si la impresión falla —se acabó el rollo, se cortó el Bluetooth, salieron
-corridas— ejecutá **`deshacerUltimoLote()`**: devuelve ese lote a la cola y
-vuelve a salir en la próxima exportación. Para un pedido suelto alcanza con
-borrar a mano su celda de `Impreso`.
+corridas— usá **Deshacer** en la misma pantalla de la app: el lote vuelve a
+`Pendiente` y sale en la próxima. Para un pedido suelto alcanza con cambiarle
+el status a mano.
 
 | Situación | Qué hacer |
 |---|---|
-| Imprimí bien | Nada. Ya quedó registrado |
-| Falló todo el lote | `deshacerUltimoLote()` |
-| Falló una etiqueta sola | Borrar la celda `Impreso` de ese pedido |
-| ¿Puedo sobrescribir el archivo? | Siempre. El registro no vive ahí |
+| Imprimí bien | Nada. Los pedidos ya están en `Impreso` |
+| Falló todo el lote | *Deshacer*, en la app (o `deshacerUltimoLote()` desde el editor) |
+| Falló una etiqueta sola | Poner ese pedido de nuevo en `Pendiente` |
+| ¿Puedo sobrescribir el archivo? | Siempre. El registro vive en la planilla |
 
 ---
 

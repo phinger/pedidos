@@ -138,6 +138,7 @@ button { cursor: pointer; touch-action: manipulation; }
 .btn:disabled { opacity: .42; cursor: default; }
 
 .btn-primario  { background: var(--acento); color: var(--acento-texto); }
+a.btn          { text-decoration: none; }
 .btn-secundario{ background: var(--superficie-2); color: var(--texto); }
 .btn-google    { background: var(--superficie); color: var(--texto); border: 1px solid var(--borde); box-shadow: var(--sombra); }
 .btn-texto     { background: none; color: var(--tenue); min-height: 46px; font-weight: 500; }
