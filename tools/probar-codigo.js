@@ -90,6 +90,15 @@ class HojaFalsa {
         hoja.formulas[fila + ':' + col] = f;
         return this;
       },
+      clearContent() {
+        hoja._asegurarFila(fila);
+        hoja.datos[fila - 1][col - 1] = '';
+        return this;
+      },
+      getValue() {
+        hoja._asegurarFila(fila);
+        return hoja.datos[fila - 1][col - 1] ?? '';
+      },
       setValue(v) {
         hoja._asegurarFila(fila);
         hoja.datos[fila - 1][col - 1] = v;
@@ -639,7 +648,7 @@ probar('crea la solapa apuntando a las columnas correctas', () => {
   afirmar(formula.indexOf("'Pedidos'!D2:D") >= 0, 'debería leer Nombre de la columna D: ' + formula);
   afirmar(formula.indexOf("'Pedidos'!E2:E") >= 0, 'debería leer Detalle de la columna E');
   afirmar(formula.indexOf("'Pedidos'!G2:G") >= 0, 'debería filtrar por la columna G (Status)');
-  afirmar(formula.indexOf("Col3 = 'Pendiente'") >= 0, 'debería filtrar por Pendiente');
+  afirmar(formula.indexOf('="Pendiente"') >= 0, 'debería filtrar por Pendiente');
   afirmar(formula.indexOf('CHAR(10)') >= 0, 'debería partir el detalle en renglones');
 });
 
@@ -673,7 +682,7 @@ probar('las letras de columna se calculan bien más allá de la Z', () => {
   igual([0, 25, 26, 27, 51, 52].map(ctx0._letraColumna), ['A', 'Z', 'AA', 'AB', 'AZ', 'BA']);
 });
 
-probar('exportarEtiquetas vuelca solo los pendientes a un archivo aparte', () => {
+probar('exporta solo los pendientes y los marca como impresos', () => {
   const { ctx, hojas } = nuevoEntorno();
   const token = login(ctx).token;
   pedidoDe(ctx, token, 'Gimena', 'k1');
@@ -681,14 +690,57 @@ probar('exportarEtiquetas vuelca solo los pendientes a un archivo aparte', () =>
   hojas[1].datos[2][6] = 'Listo';        // el segundo ya no está pendiente
 
   ctx.exportarEtiquetas();
-  igual(ctx.creadas.length, 1, 'debería haber creado un archivo');
-
   const hoja = ctx.creadas[0].getSheets()[0];
   igual(hoja.datos[0], ['Nombre', 'Detalle']);
   igual(hoja.datos[1][0], 'Gimena');
   igual(hoja.datos[1][1], 'Milanesa de soja x3\nPan integral x2',
     'el detalle debería venir en renglones');
-  igual(hoja.getLastRow(), 2, 'el pedido que ya no está pendiente no debería aparecer');
+  igual(hoja.getLastRow(), 2, 'el que ya no está pendiente no debería salir');
+
+  const colImpreso = 8;   // 0-based: se agrega después de Email
+  afirmar(hojas[1].datos[1][colImpreso], 'el pedido exportado debería quedar marcado');
+});
+
+probar('exportar de nuevo no reimprime lo ya impreso', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  const token = login(ctx).token;
+  pedidoDe(ctx, token, 'Gimena', 'k1');
+
+  ctx.exportarEtiquetas();
+  igual(ctx.creadas[0].getSheets()[0].getLastRow(), 2, 'primera corrida: un pedido');
+
+  ctx.exportarEtiquetas();
+  igual(ctx.creadas[0].getSheets()[0].getLastRow(), 1,
+    'segunda corrida: solo encabezados, no hay nada nuevo');
+
+  pedidoDe(ctx, token, 'Marcelo', 'k2');
+  ctx.exportarEtiquetas();
+  const hoja = ctx.creadas[0].getSheets()[0];
+  igual(hoja.getLastRow(), 2, 'tercera corrida: solo el pedido nuevo');
+  igual(hoja.datos[1][0], 'Marcelo');
+});
+
+probar('deshacerUltimoLote devuelve los pedidos a la cola', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  const token = login(ctx).token;
+  pedidoDe(ctx, token, 'Gimena', 'k1');
+
+  ctx.exportarEtiquetas();
+  ctx.deshacerUltimoLote();
+  igual(hojas[1].datos[1][8], '', 'la marca debería haberse borrado');
+
+  ctx.exportarEtiquetas();
+  igual(ctx.creadas[0].getSheets()[0].datos[1][0], 'Gimena', 'debería volver a salir');
+});
+
+probar('deshacer dos veces no rompe nada', () => {
+  const { ctx } = nuevoEntorno();
+  const token = login(ctx).token;
+  pedidoDe(ctx, token, 'Gimena', 'k1');
+  ctx.exportarEtiquetas();
+  ctx.deshacerUltimoLote();
+  ctx.deshacerUltimoLote();
+  igual(ctx.registro[ctx.registro.length - 1], 'No hay ningún lote para deshacer.');
 });
 
 probar('exportar dos veces reutiliza el mismo archivo', () => {
@@ -701,12 +753,12 @@ probar('exportar dos veces reutiliza el mismo archivo', () => {
   igual(ctx.creadas.length, 1, 'no debería crear un archivo por corrida');
 });
 
-probar('exportar sin pendientes deja solo los encabezados', () => {
-  const { ctx } = nuevoEntorno();
-  login(ctx);
-  ctx.exportarEtiquetas();
-  igual(ctx.creadas[0].getSheets()[0].datos[0], ['Nombre', 'Detalle']);
-  igual(ctx.creadas[0].getSheets()[0].getLastRow(), 1);
+probar('la vista viva también excluye lo impreso', () => {
+  const { ctx, hojas } = nuevoEntorno();
+  ctx.prepararEtiquetas();
+  const formula = hojas.find((h) => h.nombre === 'Etiquetas').formulas['2:1'];
+  afirmar(formula.indexOf('="Pendiente"') >= 0, 'debería filtrar por Pendiente: ' + formula);
+  afirmar(formula.indexOf('I2:I=""') >= 0, 'debería excluir los que tienen fecha de impresión');
 });
 
 console.log('\n' + (fallas === 0

@@ -155,7 +155,7 @@ Después entrá siempre por el ícono.
 ## Etiquetas en la Niimbot B1
 
 La solapa **`Etiquetas`** muestra el `Nombre` y el `Detalle` de los pedidos que
-están en `Pendiente`, listos para imprimir. Se crea ejecutando
+están en `Pendiente` **y todavía no se imprimieron**. Se crea ejecutando
 **`prepararEtiquetas()`** una vez desde el editor de Apps Script.
 
 Es una **vista viva**, no una copia: está armada con una fórmula, así que los
@@ -183,10 +183,10 @@ archivo. Exportar la planilla completa le entrega el catálogo de productos en
 vez de las etiquetas, y no hay forma de elegir otra solapa desde ahí. Por eso:
 
 1. Ejecutá **`exportarEtiquetas()`** desde el editor de Apps Script. Vuelca los
-   pendientes a una planilla aparte de una sola solapa, llamada *Etiquetas para
-   imprimir*. Siempre reutiliza el mismo archivo, así que el enlace no cambia y
-   conviene dejarlo a mano en el teléfono. Desde ahí, **Archivo → Descargar →
-   Microsoft Excel (.xlsx)**.
+   pendientes sin imprimir a una planilla aparte de una sola solapa, llamada
+   *Etiquetas para imprimir*, y los marca como impresos. Siempre reutiliza el
+   mismo archivo, así que el enlace no cambia y conviene dejarlo a mano en el
+   teléfono. Desde ahí, **Archivo → Descargar → Microsoft Excel (.xlsx)**.
 2. Abrí la app **NIIMBOT** y emparejá la B1 por Bluetooth.
 3. Nueva etiqueta → tamaño **50 × 30 mm**.
 4. Menú de importación → **Excel** → elegí el archivo → mapeá `Nombre` al campo
@@ -200,6 +200,28 @@ renglones. La B1 imprime 48 mm de ancho útil a 203 dpi.
 > Si la app de la impresora aplastara los saltos de línea al importar, cambiá
 > `CHAR(10)` por `"; "` en la fórmula de `Etiquetas!A2` y el detalle vuelve a
 > una sola línea.
+
+### Qué ya se imprimió
+
+La columna **`Impreso`** de la solapa `Pedidos` guarda la fecha y hora en que
+cada pedido salió. La crea el script solo, la primera vez que hace falta.
+
+Ese es el registro; **el archivo de la impresora es descartable** y se puede
+sobrescribir cuando se quiera. Cada corrida de `exportarEtiquetas()` trae
+únicamente lo que entró desde la anterior, así que ejecutarla de más nunca
+reimprime nada: como mucho devuelve un archivo con solo los encabezados.
+
+Si la impresión falla —se acabó el rollo, se cortó el Bluetooth, salieron
+corridas— ejecutá **`deshacerUltimoLote()`**: devuelve ese lote a la cola y
+vuelve a salir en la próxima exportación. Para un pedido suelto alcanza con
+borrar a mano su celda de `Impreso`.
+
+| Situación | Qué hacer |
+|---|---|
+| Imprimí bien | Nada. Ya quedó registrado |
+| Falló todo el lote | `deshacerUltimoLote()` |
+| Falló una etiqueta sola | Borrar la celda `Impreso` de ese pedido |
+| ¿Puedo sobrescribir el archivo? | Siempre. El registro no vive ahí |
 
 ---
 

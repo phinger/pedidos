@@ -41,6 +41,7 @@ const CFG = {
     detalle: ['detalle', 'productos', 'items', 'pedido'],          // requerida
     total:   ['total', 'cantidad', 'totalitems', 'unidades'],
     email:   ['email', 'usuario', 'cargadopor', 'mail'],
+    impreso: ['impreso', 'impresion', 'etiqueta'],
   },
   COL_STATUS: ['status', 'estado'],
 
@@ -627,12 +628,17 @@ function prepararEtiquetas() {
     return ref + l + '2:' + l;
   };
 
+  const colImpreso = _asegurarColumnaImpreso(pedidos);
+
+  /* FILTER y no QUERY: comparar contra celdas vacías es directo. */
   const formula =
-    '=IFERROR(QUERY({' +
+    '=IFERROR(FILTER({' +
       rango(col.nombre) + ',' +
-      'ARRAYFORMULA(SUBSTITUTE(' + rango(col.detalle) + ',"' + CFG.SEPARADOR + '",CHAR(10)))' + ',' +
-      rango(colStatus) +
-    '},"select Col1, Col2 where Col3 = ' + "'" + CFG.STATUS_INICIAL + "'" + '",0),"")';
+      'ARRAYFORMULA(SUBSTITUTE(' + rango(col.detalle) + ',"' + CFG.SEPARADOR + '",CHAR(10)))' +
+    '},' +
+      rango(colStatus) + '="' + CFG.STATUS_INICIAL + '",' +
+      rango(colImpreso) + '=""' +
+    '),"")';
 
   let hoja = ss.getSheetByName(CFG.HOJA_ETIQUETAS);
   if (!hoja) hoja = ss.insertSheet(CFG.HOJA_ETIQUETAS);
@@ -653,9 +659,26 @@ function prepararEtiquetas() {
   Logger.log('Es una vista viva: se actualiza sola, no hay que volver a ejecutar esto.');
 }
 
-/** Lee los pedidos pendientes y los devuelve como [[Nombre, Detalle], ...]. */
+/**
+ * Devuelve el índice de la columna "Impreso", creándola al final si no está.
+ * Es el registro de qué etiquetas ya salieron: el archivo que se manda a la
+ * impresora es descartable, esto no.
+ */
+function _asegurarColumnaImpreso(pedidos) {
+  const ancho = Math.max(1, pedidos.getLastColumn());
+  const encabezados = pedidos.getRange(1, 1, 1, ancho).getValues()[0].map(_normalizar);
+  const indice = _buscarColumna(encabezados, CFG.COLS_PEDIDOS.impreso);
+  if (indice >= 0) return indice;
+
+  pedidos.getRange(1, ancho + 1).setValue('Impreso').setFontWeight('bold');
+  pedidos.setColumnWidth(ancho + 1, 130);
+  return ancho;
+}
+
+/** Lee los pedidos pendientes y todavía no impresos. */
 function _filasEtiquetas() {
   const pedidos = _hoja(CFG.HOJA_PEDIDOS);
+  const colImpreso = _asegurarColumnaImpreso(pedidos);
   const valores = pedidos.getDataRange().getValues();
   if (valores.length < 2) return [];
 
@@ -668,57 +691,123 @@ function _filasEtiquetas() {
       'status en la solapa "' + CFG.HOJA_PEDIDOS + '".', 'SIN_CONFIG');
   }
 
-  const filas = [];
   const separador = new RegExp(CFG.SEPARADOR.replace(/[.*+?^{}()|[\]\\]/g, '\\$&'), 'g');
+  const filas = [];
 
   for (let i = 1; i < valores.length; i++) {
     if (String(valores[i][colStatus] || '').trim() !== CFG.STATUS_INICIAL) continue;
-    filas.push([
-      String(valores[i][col.nombre] || ''),
-      String(valores[i][col.detalle] || '').replace(separador, '\n'),
-    ]);
+    if (String(valores[i][colImpreso] || '').trim()) continue;   // ya salió
+    filas.push({
+      fila: i + 1,
+      id: String(valores[i][col.id] || ''),
+      nombre: String(valores[i][col.nombre] || ''),
+      detalle: String(valores[i][col.detalle] || '').replace(separador, '\n'),
+    });
   }
   return filas;
 }
 
 /**
- * Vuelca los pedidos pendientes en una planilla aparte, de una sola solapa.
+ * Vuelca los pedidos pendientes sin imprimir en una planilla aparte, de una
+ * sola solapa, y los marca como impresos.
  *
- * Existe por una limitación de la app de la impresora: al importar un Excel
- * lee únicamente la primera solapa del archivo, así que exportar la planilla
- * completa le entrega el catálogo de productos en vez de las etiquetas.
+ * El archivo de una sola solapa existe por una limitación de la app de la
+ * impresora: al importar un Excel lee únicamente la primera solapa, así que
+ * exportar la planilla completa le entrega el catálogo de productos.
  *
  * Reutiliza siempre el mismo archivo, así el enlace no cambia y se puede
- * dejar a mano en el teléfono.
+ * dejar a mano en el teléfono. Se puede sobrescribir cuando se quiera: lo que
+ * importa —qué ya salió— queda en la columna "Impreso" de la planilla, no acá.
+ *
+ * Si la impresión falla, deshacerUltimoLote() devuelve esos pedidos a la cola.
  */
 function exportarEtiquetas() {
-  const filas = _filasEtiquetas();
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) throw _error('Hay otra exportación en curso.', 'OCUPADO');
+
+  try {
+    const pendientes = _filasEtiquetas();
+    const props = PropertiesService.getScriptProperties();
+
+    let archivo = null;
+    const idGuardado = props.getProperty('ID_ARCHIVO_ETIQUETAS');
+    if (idGuardado) {
+      try { archivo = SpreadsheetApp.openById(idGuardado); }
+      catch (e) { archivo = null; }        // lo borraron o le sacaron el permiso
+    }
+    if (!archivo) {
+      archivo = SpreadsheetApp.create('Etiquetas para imprimir');
+      props.setProperty('ID_ARCHIVO_ETIQUETAS', archivo.getId());
+    }
+
+    const hoja = archivo.getSheets()[0];
+    hoja.clear();
+    hoja.getRange(1, 1, 1, 2).setValues([['Nombre', 'Detalle']]).setFontWeight('bold');
+    if (pendientes.length) {
+      hoja.getRange(2, 1, pendientes.length, 2).setValues(
+        pendientes.map(function (p) { return [p.nombre, p.detalle]; }));
+    }
+    hoja.setColumnWidth(1, 160);
+    hoja.setColumnWidth(2, 340);
+
+    /* Se marcan recién ahora: si algo falló antes, no quedaron marcados. */
+    if (pendientes.length) {
+      const pedidos = _hoja(CFG.HOJA_PEDIDOS);
+      const colImpreso = _asegurarColumnaImpreso(pedidos);
+      const ahora = new Date();
+      pendientes.forEach(function (p) {
+        pedidos.getRange(p.fila, colImpreso + 1).setValue(ahora);
+      });
+      props.setProperty('ULTIMO_LOTE', JSON.stringify(
+        pendientes.map(function (p) { return { fila: p.fila, id: p.id }; })));
+    }
+    SpreadsheetApp.flush();
+
+    if (!pendientes.length) {
+      Logger.log('No hay etiquetas pendientes: ya está todo impreso.');
+    } else {
+      Logger.log('%s etiqueta(s) exportadas y marcadas como impresas: %s',
+        pendientes.length, pendientes.map(function (p) { return p.id; }).join(', '));
+      Logger.log('Si la impresión falla, ejecutá deshacerUltimoLote().');
+    }
+    Logger.log('Archivo: %s', archivo.getUrl());
+    Logger.log('Desde ahí: Archivo → Descargar → Excel, y ese .xlsx se importa en la NIIMBOT.');
+    return archivo.getUrl();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Devuelve el último lote exportado a la cola de impresión, por si el rollo se
+ * acabó, se cortó el Bluetooth o las etiquetas salieron mal.
+ */
+function deshacerUltimoLote() {
   const props = PropertiesService.getScriptProperties();
-
-  let archivo = null;
-  const idGuardado = props.getProperty('ID_ARCHIVO_ETIQUETAS');
-  if (idGuardado) {
-    try { archivo = SpreadsheetApp.openById(idGuardado); }
-    catch (e) { archivo = null; }        // lo borraron o le sacaron el permiso
-  }
-  if (!archivo) {
-    archivo = SpreadsheetApp.create('Etiquetas para imprimir');
-    props.setProperty('ID_ARCHIVO_ETIQUETAS', archivo.getId());
+  const crudo = props.getProperty('ULTIMO_LOTE');
+  if (!crudo) {
+    Logger.log('No hay ningún lote para deshacer.');
+    return;
   }
 
-  const hoja = archivo.getSheets()[0];
-  hoja.clear();
-  hoja.getRange(1, 1, 1, 2).setValues([['Nombre', 'Detalle']]).setFontWeight('bold');
-  if (filas.length) hoja.getRange(2, 1, filas.length, 2).setValues(filas);
-  hoja.setColumnWidth(1, 160);
-  hoja.setColumnWidth(2, 340);
+  const pedidos = _hoja(CFG.HOJA_PEDIDOS);
+  const colImpreso = _asegurarColumnaImpreso(pedidos);
+  const encabezados = pedidos.getRange(1, 1, 1, pedidos.getLastColumn())
+    .getValues()[0].map(_normalizar);
+  const colId = _buscarColumna(encabezados, CFG.COLS_PEDIDOS.id);
+
+  let devueltos = 0;
+  JSON.parse(crudo).forEach(function (item) {
+    /* Se confirma por ID antes de borrar, por si alguien movió filas a mano. */
+    const idEnLaFila = String(pedidos.getRange(item.fila, colId + 1).getValue() || '');
+    if (idEnLaFila !== item.id) return;
+    pedidos.getRange(item.fila, colImpreso + 1).clearContent();
+    devueltos++;
+  });
+
+  props.deleteProperty('ULTIMO_LOTE');
   SpreadsheetApp.flush();
-
-  Logger.log('%s pedido(s) en "%s" volcados a un archivo de una sola solapa.',
-    filas.length, CFG.STATUS_INICIAL);
-  Logger.log('Archivo: %s', archivo.getUrl());
-  Logger.log('Desde ahí: Archivo → Descargar → Excel, y ese .xlsx se importa en la NIIMBOT.');
-  return archivo.getUrl();
+  Logger.log('%s pedido(s) volvieron a la cola de impresión.', devueltos);
 }
 
 /**
