@@ -1,6 +1,6 @@
 /* Service worker: deja la app abriendo instantánea.
    Al publicar cambios, subir VERSION para invalidar el caché. */
-const VERSION = 'pedidos-v4';
+const VERSION = 'pedidos-v5';
 
 const RECURSOS = [
   './',
