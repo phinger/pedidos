@@ -26,12 +26,20 @@ const ventaDe   = (costo, margen) =>
 const $  = (sel) => document.querySelector(sel);
 
 const estado = {
+  vista: 'productos',
   productos: [],
   columnas: {},
   busqueda: '',
   verInactivos: false,
   orden: { campo: 'nombre', asc: true },
+
+  pedidos: [],
+  estados: { inicial: 'Pendiente', impreso: 'Impreso', entregado: 'Entregado', cancelado: 'Cancelado' },
+  filtroEstado: '__todos__',
+  editando: null,
 };
+
+const TODOS = '__todos__';
 
 const dinero = new Intl.NumberFormat('es-AR', {
   style: 'currency', currency: 'ARS', maximumFractionDigits: 2,
@@ -103,9 +111,14 @@ async function cargar() {
   $('#cargando').hidden = false;
   $('#pantalla-error').hidden = true;
   try {
-    const r = await api('catalogo');
-    estado.productos = r.productos;
-    estado.columnas = r.columnas || {};
+    /* Las dos vistas se traen juntas: cambiar de solapa tiene que ser
+       instantáneo, sin volver a esperar al servidor. */
+    const [catalogo, pedidos] = await Promise.all([api('catalogo'), api('pedidos')]);
+    estado.productos = catalogo.productos;
+    estado.columnas = catalogo.columnas || {};
+    estado.pedidos = pedidos.pedidos;
+    if (pedidos.estados) estado.estados = pedidos.estados;
+
     $('#cargando').hidden = true;
     $('#app').hidden = false;
     render();
@@ -137,6 +150,33 @@ async function diagnosticar() {
   }
 }
 
+/* ── Vistas ──────────────────────────────────────────────────────────── */
+
+function mostrarVista(vista) {
+  estado.vista = vista;
+  const enProductos = vista === 'productos';
+
+  $('#solapa-productos').setAttribute('aria-selected', String(enProductos));
+  $('#solapa-pedidos').setAttribute('aria-selected', String(!enProductos));
+  $('#vista-productos').hidden = !enProductos;
+  $('#vista-pedidos').hidden = enProductos;
+  $('#resumen-productos').hidden = !enProductos;
+  $('#resumen-pedidos').hidden = enProductos;
+  $('#pie-productos').hidden = !enProductos;
+  $('#pie-pedidos').hidden = enProductos;
+  $('#filtro-inactivos').hidden = !enProductos;
+  $('#chips-estado').hidden = enProductos;
+  $('#buscar').placeholder = enProductos
+    ? 'Buscar producto o categoría'
+    : 'Buscar por nombre, número o producto';
+
+  /* Cada vista tiene su propia búsqueda: pasar de una a otra con el filtro
+     puesto haría parecer que faltan cosas. */
+  estado.busqueda = '';
+  $('#buscar').value = '';
+  render();
+}
+
 /* ── Render ──────────────────────────────────────────────────────────── */
 
 function visibles() {
@@ -162,6 +202,8 @@ function visibles() {
 }
 
 function render() {
+  if (estado.vista === 'pedidos') { renderPedidos(); return; }
+
   const lista = visibles();
   const cuerpo = $('#cuerpo');
   cuerpo.innerHTML = '';
@@ -174,6 +216,7 @@ function render() {
   renderFilaNueva();
   renderResumen();
   renderOrden();
+  renderContadorPedidos();   // el badge de la otra solapa también se mira desde acá
 }
 
 function renderOrden() {
@@ -331,6 +374,277 @@ function crearFila(p) {
   return tr;
 }
 
+/* ── Pedidos ─────────────────────────────────────────────────────────── */
+
+function pedidosVisibles() {
+  const q = estado.busqueda.trim().toLowerCase();
+  return estado.pedidos.filter((p) => {
+    if (estado.filtroEstado !== TODOS && p.status !== estado.filtroEstado) return false;
+    if (!q) return true;
+    return (p.id + ' ' + p.nombre + ' ' + p.detalle).toLowerCase().includes(q);
+  });
+}
+
+function renderPedidos() {
+  renderChipsEstado();
+
+  const lista = pedidosVisibles();
+  const cont = $('#lista-pedidos');
+  cont.innerHTML = '';
+
+  const frag = document.createDocumentFragment();
+  lista.forEach((p) => frag.appendChild(crearTarjetaPedido(p)));
+  cont.appendChild(frag);
+
+  $('#sin-pedidos').hidden = lista.length > 0;
+  renderResumenPedidos();
+}
+
+function renderChipsEstado() {
+  const cont = $('#chips-estado');
+  const cuenta = (valor) => valor === TODOS
+    ? estado.pedidos.length
+    : estado.pedidos.filter((p) => p.status === valor).length;
+
+  const opciones = [
+    [TODOS, 'Todos'],
+    [estado.estados.inicial, 'Pendientes'],
+    [estado.estados.impreso, 'Impresos'],
+    [estado.estados.entregado, 'Entregados'],
+    [estado.estados.cancelado, 'Cancelados'],
+  ];
+
+  cont.innerHTML = '';
+  opciones.forEach(([valor, etiqueta]) => {
+    const n = cuenta(valor);
+    /* Un estado sin pedidos no ocupa lugar, salvo que sea el filtro puesto. */
+    if (!n && valor !== TODOS && valor !== estado.filtroEstado) return;
+
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.type = 'button';
+    chip.setAttribute('aria-selected', String(estado.filtroEstado === valor));
+    chip.append(etiqueta);
+    const cuentaEl = document.createElement('span');
+    cuentaEl.className = 'cuenta';
+    cuentaEl.textContent = n;
+    chip.appendChild(cuentaEl);
+    chip.onclick = () => { estado.filtroEstado = valor; render(); };
+    cont.appendChild(chip);
+  });
+}
+
+function renderContadorPedidos() {
+  const pendientes = estado.pedidos.filter((p) => p.status === estado.estados.inicial).length;
+  const contador = $('#contador-pedidos');
+  contador.hidden = pendientes === 0;
+  contador.textContent = pendientes;
+}
+
+function renderResumenPedidos() {
+  const cuenta = (v) => estado.pedidos.filter((p) => p.status === v).length;
+
+  /* El servidor manda la fecha como dd/MM/yyyy ya formateada, así que se
+     compara contra el mismo formato y no contra el del navegador. */
+  const d = new Date();
+  const hoy = String(d.getDate()).padStart(2, '0') + '/' +
+              String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+
+  $('#p-total').textContent = estado.pedidos.length;
+  $('#p-pendientes').textContent = cuenta(estado.estados.inicial);
+  $('#p-impresos').textContent = cuenta(estado.estados.impreso);
+  $('#p-entregados').textContent = estado.pedidos
+    .filter((p) => p.status === estado.estados.entregado && p.fecha === hoy).length;
+
+  renderContadorPedidos();
+}
+
+function crearTarjetaPedido(p) {
+  const tarjeta = document.createElement('article');
+  tarjeta.className = 'pedido';
+  tarjeta.dataset.status = p.status;
+
+  const id = document.createElement('div');
+  id.className = 'pedido-id';
+  id.textContent = p.id;
+
+  const cuando = document.createElement('div');
+  cuando.className = 'pedido-cuando';
+  cuando.textContent = [p.fecha, p.hora].filter(Boolean).join(' · ');
+
+  const centro = document.createElement('div');
+  const quien = document.createElement('div');
+  quien.className = 'pedido-quien';
+  quien.textContent = p.nombre;
+  const items = document.createElement('div');
+  items.className = 'pedido-items';
+  items.textContent = p.detalle;
+  centro.append(quien, items);
+
+  if (p.email) {
+    const mail = document.createElement('div');
+    mail.className = 'pedido-mail';
+    mail.textContent = p.email;
+    centro.appendChild(mail);
+  }
+
+  const derecha = document.createElement('div');
+  derecha.className = 'pedido-derecha';
+
+  const marca = document.createElement('span');
+  marca.className = 'marca-estado';
+  marca.dataset.status = p.status;
+  marca.textContent = p.status || '—';
+  derecha.appendChild(marca);
+
+  const acciones = document.createElement('div');
+  acciones.className = 'pedido-acciones';
+
+  const boton = (texto, clase, alHacerClic) => {
+    const b = document.createElement('button');
+    b.className = 'btn ' + (clase || 'btn-fantasma');
+    b.type = 'button';
+    b.textContent = texto;
+    b.onclick = () => alHacerClic(b);
+    return b;
+  };
+
+  const entregado = p.status === estado.estados.entregado;
+  const cancelado = p.status === estado.estados.cancelado;
+
+  if (!entregado && !cancelado) {
+    acciones.appendChild(boton('Entregar', 'btn-primario', (b) => operar(p, 'entregar', b)));
+    acciones.appendChild(boton('Editar', null, () => abrirEdicion(p)));
+    acciones.appendChild(boton('Cancelar', null, (b) => {
+      if (confirm('¿Cancelar el pedido ' + p.id + ' de ' + p.nombre + '?')) operar(p, 'cancelar', b);
+    }));
+  } else {
+    acciones.appendChild(boton('Deshacer', null, (b) => operar(p, 'deshacer', b)));
+  }
+
+  derecha.appendChild(acciones);
+  tarjeta.append(id, cuando, centro, derecha);
+  return tarjeta;
+}
+
+async function operar(pedido, operacion, boton) {
+  const previo = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = '…';
+  try {
+    const r = await api('estadoPedido', { fila: pedido.fila, id: pedido.id, operacion });
+    pedido.status = r.status;
+
+    if (operacion === 'entregar') {
+      /* El descuadre no frena la entrega, pero tiene que verse: la planilla y
+         el depósito no coinciden y alguien lo tiene que revisar. */
+      if (r.recortados && r.recortados.length) {
+        aviso('Entregado. Faltaba stock de ' +
+          r.recortados.map((x) => x.nombre).join(', ') + ' — quedó en cero', 'error');
+      } else if (r.faltantes && r.faltantes.length) {
+        aviso('Entregado. No encontré en el catálogo: ' + r.faltantes.join(', '), 'error');
+      } else {
+        aviso('Pedido ' + pedido.id + ' entregado');
+      }
+      await recargarCatalogo();
+    } else {
+      aviso(operacion === 'cancelar' ? 'Pedido cancelado' : 'Se deshizo el cambio');
+      if (operacion === 'deshacer') await recargarCatalogo();
+    }
+    render();
+  } catch (e) {
+    if (e.codigo === 'SIN_AUTORIZACION') return;
+    aviso(e.message, 'error');
+    boton.disabled = false;
+    boton.textContent = previo;
+  }
+}
+
+/* El stock cambió del lado del servidor: la otra solapa tiene que reflejarlo. */
+async function recargarCatalogo() {
+  try {
+    const r = await api('catalogo');
+    estado.productos = r.productos;
+    estado.columnas = r.columnas || {};
+  } catch { /* el listado de pedidos ya se actualizó igual */ }
+}
+
+/* ── Edición del detalle ─────────────────────────────────────────────── */
+
+function abrirEdicion(pedido) {
+  estado.editando = pedido;
+  $('#editar-titulo').textContent = 'Pedido ' + pedido.id;
+  $('#editar-sub').textContent = pedido.nombre + ' · ' + [pedido.fecha, pedido.hora].filter(Boolean).join(' ');
+  $('#editar-error').hidden = true;
+
+  const cont = $('#editar-items');
+  cont.innerHTML = '';
+
+  pedido.items.forEach((item) => {
+    const fila = document.createElement('div');
+    fila.className = 'item-editable';
+
+    const nombre = document.createElement('span');
+    nombre.textContent = item.nombre;
+
+    const cantidad = document.createElement('input');
+    cantidad.type = 'number';
+    cantidad.min = '0';
+    cantidad.step = '1';
+    cantidad.value = item.cantidad;
+    cantidad.setAttribute('aria-label', 'cantidad de ' + item.nombre);
+    /* Poner cero tacha el renglón: se ve que va a salir del pedido antes de
+       guardar, en vez de descubrirlo después. */
+    cantidad.addEventListener('input', () => {
+      fila.dataset.fuera = String(!(Number(cantidad.value) > 0));
+    });
+
+    fila.dataset.fuera = String(!(item.cantidad > 0));
+    fila.append(nombre, cantidad);
+    cont.appendChild(fila);
+  });
+
+  $('#velo').hidden = false;
+  $('#dialogo-editar').hidden = false;
+}
+
+function cerrarEdicion() {
+  estado.editando = null;
+  $('#velo').hidden = true;
+  $('#dialogo-editar').hidden = true;
+}
+
+async function guardarEdicion() {
+  const pedido = estado.editando;
+  if (!pedido) return;
+
+  const items = Array.from($('#editar-items').children).map((fila) => ({
+    nombre: fila.querySelector('span').textContent,
+    cantidad: Number(fila.querySelector('input').value) || 0,
+  }));
+
+  const boton = $('#btn-guardar-edicion');
+  boton.disabled = true;
+  boton.textContent = 'Guardando…';
+  try {
+    const r = await api('editarPedido', { fila: pedido.fila, id: pedido.id, items });
+    pedido.detalle = r.detalle;
+    pedido.total = r.total;
+    pedido.items = r.items;
+    cerrarEdicion();
+    aviso('Pedido ' + pedido.id + ' actualizado');
+    render();
+  } catch (e) {
+    if (e.codigo === 'SIN_AUTORIZACION') return;
+    const err = $('#editar-error');
+    err.textContent = e.message;
+    err.hidden = false;
+  } finally {
+    boton.disabled = false;
+    boton.textContent = 'Guardar';
+  }
+}
+
 /* ── Alta de productos ───────────────────────────────────────────────── */
 
 /* Una fila vacía al pie: se completa y, al salir del campo, el producto se
@@ -486,7 +800,20 @@ function conectarEventos() {
     render();
   });
 
-  $('#btn-recargar').addEventListener('click', () => { cargar(); aviso('Catálogo recargado'); });
+  $('#solapa-productos').addEventListener('click', () => mostrarVista('productos'));
+  $('#solapa-pedidos').addEventListener('click', () => mostrarVista('pedidos'));
+
+  $('#btn-cancelar-edicion').addEventListener('click', cerrarEdicion);
+  $('#btn-guardar-edicion').addEventListener('click', guardarEdicion);
+  $('#velo').addEventListener('click', cerrarEdicion);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#dialogo-editar').hidden) cerrarEdicion();
+  });
+
+  $('#btn-recargar').addEventListener('click', () => {
+    cargar();
+    aviso(estado.vista === 'pedidos' ? 'Pedidos actualizados' : 'Catálogo recargado');
+  });
   $('#btn-reintentar').addEventListener('click', cargar);
 
   document.querySelectorAll('thead th[data-orden]').forEach((th) => {

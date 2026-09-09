@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#101114" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="../icons/icon-192.png">
-<link rel="stylesheet" href="admin.css?v=17">
+<link rel="stylesheet" href="admin.css?v=18">
 </head>
 <body>
 
@@ -29,14 +29,19 @@
   <header class="cabecera">
     <div class="cabecera-fila">
       <div class="titulo">
-        <h1>Catálogo</h1>
+        <nav class="solapas" role="tablist">
+          <button class="solapa" id="solapa-productos" role="tab" aria-selected="true">Productos</button>
+          <button class="solapa" id="solapa-pedidos" role="tab" aria-selected="false">
+            Pedidos <span class="contador" id="contador-pedidos" hidden></span>
+          </button>
+        </nav>
         <p class="usuario" id="usuario"></p>
       </div>
       <div class="acciones">
         <label class="buscador">
           <input id="buscar" type="search" placeholder="Buscar producto o categoría" autocomplete="off">
         </label>
-        <label class="interruptor">
+        <label class="interruptor" id="filtro-inactivos">
           <input type="checkbox" id="ver-inactivos">
           <span>Ver inactivos</span>
         </label>
@@ -44,16 +49,25 @@
       </div>
     </div>
 
-    <dl class="resumen">
+    <div class="chips" id="chips-estado" hidden></div>
+
+    <dl class="resumen" id="resumen-productos">
       <div><dt>Productos</dt><dd id="r-productos">—</dd></div>
       <div><dt>Sin stock</dt><dd id="r-sinstock">—</dd></div>
       <div><dt>Stock a costo</dt><dd id="r-costo">—</dd></div>
       <div><dt>Stock a venta</dt><dd id="r-venta">—</dd></div>
       <div><dt>Margen promedio</dt><dd id="r-margen">—</dd></div>
     </dl>
+
+    <dl class="resumen" id="resumen-pedidos" hidden>
+      <div><dt>Pedidos</dt><dd id="p-total">—</dd></div>
+      <div><dt>Pendientes</dt><dd id="p-pendientes">—</dd></div>
+      <div><dt>Impresos</dt><dd id="p-impresos">—</dd></div>
+      <div><dt>Entregados hoy</dt><dd id="p-entregados">—</dd></div>
+    </dl>
   </header>
 
-  <main class="marco-tabla">
+  <main class="marco-tabla" id="vista-productos">
     <table id="tabla">
       <thead>
         <tr>
@@ -74,18 +88,43 @@
     <p class="sin-resultados" id="sin-resultados" hidden>Ningún producto coincide con la búsqueda.</p>
   </main>
 
+  <main class="marco-tabla" id="vista-pedidos" hidden>
+    <div class="lista-pedidos" id="lista-pedidos"></div>
+    <p class="sin-resultados" id="sin-pedidos" hidden>Ningún pedido coincide con el filtro.</p>
+  </main>
+
   <footer class="pie">
-    <p>
+    <p id="pie-productos">
       El margen se calcula sobre la venta: <code>venta = costo ÷ (1 − margen)</code>.
       Los cambios se guardan solos al salir de cada celda.
       Para agregar un producto, escribí en la fila vacía de abajo.
     </p>
+    <p id="pie-pedidos" hidden>
+      Entregar descuenta el stock; deshacer lo repone. Un pedido entregado o
+      cancelado ya no se puede editar.
+    </p>
   </footer>
 </div>
 
+<div class="velo" id="velo" hidden></div>
+<section class="dialogo" id="dialogo-editar" hidden aria-modal="true" role="dialog" aria-label="Editar el pedido">
+  <header class="dialogo-cabecera">
+    <h2 id="editar-titulo">Editar pedido</h2>
+    <p id="editar-sub"></p>
+  </header>
+  <div class="dialogo-cuerpo" id="editar-items"></div>
+  <footer class="dialogo-pie">
+    <p class="nota-error" id="editar-error" hidden></p>
+    <div class="dialogo-botones">
+      <button class="btn btn-fantasma" id="btn-cancelar-edicion">Cancelar</button>
+      <button class="btn btn-primario" id="btn-guardar-edicion">Guardar</button>
+    </div>
+  </footer>
+</section>
+
 <div class="aviso" id="aviso" hidden role="status"></div>
 
-<script src="../config.js?v=17"></script>
-<script src="admin.js?v=17"></script>
+<script src="../config.js?v=18"></script>
+<script src="admin.js?v=18"></script>
 </body>
 </html>

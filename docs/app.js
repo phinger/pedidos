@@ -798,7 +798,7 @@ function conectarEventos() {
     const u = estado.usuario;
     /* La versión sirve para saber de un vistazo si el teléfono está corriendo
        el build que se acaba de publicar. */
-    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v17';
+    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v18';
     abrirHoja('#p-menu');
   };
   $('#btn-etiquetas').onclick = generarEtiquetas;

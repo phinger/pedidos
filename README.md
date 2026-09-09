@@ -152,10 +152,44 @@ Después entrá siempre por el ícono.
 
 ---
 
-## Catálogo: stock, costos y precios
+## Administración
 
 **https://phinger.github.io/pedidos/admin/** — pensada para usar desde la
 computadora. También se llega desde la app: **⋮ → Stock y precios**.
+
+Tiene dos solapas, **Productos** y **Pedidos**, y las dos se cargan de una sola
+vez al abrir: cambiar de solapa es instantáneo y no se pierde lo que se estaba
+haciendo. El número rojo sobre *Pedidos* cuenta los que están pendientes.
+
+### Pedidos
+
+Listado con el más nuevo arriba, filtros por estado y buscador por número,
+nombre o producto. Sobre cada pedido:
+
+| Acción | Qué hace |
+|---|---|
+| **Entregar** | Descuenta el stock y pasa el pedido a `Entregado` |
+| **Editar** | Corrige las cantidades; recalcula detalle y total |
+| **Cancelar** | Pasa a `Cancelado` y lo saca de la cola de etiquetas, sin tocar el stock |
+| **Deshacer** | Vuelve al estado anterior; si era una entrega, repone el stock |
+
+El recorrido de un pedido es `Pendiente` → `Impreso` (al generar etiquetas) →
+`Entregado`. Se puede entregar directo desde cualquiera de los dos primeros.
+
+**El stock nunca queda negativo.** Si al entregar no alcanza, se descuenta
+hasta cero y la pantalla avisa de qué producto faltaba: quien apretó *Entregar*
+ya despachó la mercadería, así que frenar la operación por un descuadre de
+planilla no arregla nada, pero el descuadre tiene que verse.
+
+**Deshacer repone lo que se descontó, no lo que se pidió.** Si un pedido de 12
+se entregó con 2 en stock, deshacer devuelve 2. Reponer 12 inventaría
+mercadería que nunca existió.
+
+Un pedido entregado o cancelado **no se puede editar**: el stock ya se movió y
+cambiar el detalle lo dejaría sin relación con lo despachado. Primero se
+deshace.
+
+### Catálogo
 
 Es una tabla editable: se cambia el valor en la celda y se guarda solo al
 salir. Cada fila muestra un tilde cuando terminó de guardar.

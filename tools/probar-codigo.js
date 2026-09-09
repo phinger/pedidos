@@ -1102,6 +1102,167 @@ probar('la vista viva filtra solo por status', () => {
   afirmar(formula.indexOf('I2:I') < 0, 'ya no debería mirar ninguna columna extra');
 });
 
+console.log('\nPedidos: listado y estados');
+
+/* Un pedido cargado sobre el entorno de catálogo, listo para operar. */
+function conPedido(cantidad = 3) {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+  llamar(ctx, {
+    accion: 'pedido', token, nombre: 'Gimena', clave: 'k1',
+    items: [{ id: productos[0].id, cantidad }],
+  });
+  return { ctx, hojas, token };
+}
+
+const stockDe = (hojas, nombre) => {
+  const f = hojas[0].datos.findIndex((fila) => fila[1] === nombre);
+  return valorDe(hojas[0], f + 1, 'Stock');
+};
+
+probar('lista los pedidos con su detalle desarmado', () => {
+  const { ctx, token } = conPedido();
+  const r = llamar(ctx, { accion: 'pedidos', token });
+
+  igual(r.pedidos.length, 1);
+  igual(r.pedidos[0].id, 'P-0001');
+  igual(r.pedidos[0].nombre, 'Gimena');
+  igual(r.pedidos[0].status, 'Pendiente');
+  igual(r.pedidos[0].items, [{ nombre: 'Almendras', cantidad: 3 }]);
+  afirmar(/^\d{2}\/\d{2}\/\d{4}$/.test(r.pedidos[0].fecha), 'fecha formateada: ' + r.pedidos[0].fecha);
+});
+
+probar('entregar descuenta el stock', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  igual(r.status, 'Entregado');
+  igual(stockDe(hojas, 'Almendras'), 9, '12 - 3');
+  igual(valorDe(hojas[1], 2, 'Status'), 'Entregado');
+});
+
+probar('deshacer la entrega repone el stock y el status anterior', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'deshacer' });
+
+  igual(r.status, 'Pendiente', 'vuelve al estado que tenía');
+  igual(stockDe(hojas, 'Almendras'), 12, 'el stock vuelve a como estaba');
+});
+
+probar('el stock nunca queda negativo, y avisa del faltante', () => {
+  const { ctx, hojas, token } = conPedido(12);
+  hojas[0].datos[1][5] = 2;        // alguien se llevó mercadería sin registrarla
+
+  const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  igual(r.status, 'Entregado', 'la entrega no se frena');
+  igual(stockDe(hojas, 'Almendras'), 0, 'frena en cero, no en -10');
+  igual(r.recortados, [{ nombre: 'Almendras', pedido: 12, habia: 2 }], 'informa el descuadre');
+});
+
+probar('deshacer repone lo descontado, no lo pedido', () => {
+  const { ctx, hojas, token } = conPedido(12);
+  hojas[0].datos[1][5] = 2;
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'deshacer' });
+
+  igual(stockDe(hojas, 'Almendras'), 2, 'repone los 2 que había, no los 12 del pedido');
+});
+
+probar('un producto que ya no está en el catálogo se informa', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  hojas[0].datos[1][1] = 'Almendras peladas';      // se renombró después del pedido
+
+  const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  igual(r.status, 'Entregado');
+  igual(r.faltantes, ['Almendras'], 'debería nombrar lo que no pudo descontar');
+});
+
+probar('no se entrega dos veces', () => {
+  const { ctx, token } = conPedido();
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  igual(llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' }).codigo,
+    'CONFLICTO');
+});
+
+probar('cancelar no toca el stock', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'cancelar' });
+  igual(r.status, 'Cancelado');
+  igual(stockDe(hojas, 'Almendras'), 12, 'no salió del depósito, no se descuenta');
+});
+
+probar('un entregado no se cancela sin deshacer antes', () => {
+  const { ctx, token } = conPedido();
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'cancelar' });
+  igual(r.codigo, 'CONFLICTO');
+  afirmar(/Deshacé la entrega/.test(r.error), r.error);
+});
+
+probar('un cancelado sale de la cola de etiquetas', () => {
+  const { ctx, token } = conPedido();
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'cancelar' });
+  igual(llamar(ctx, { accion: 'etiquetas', token }).cantidad, 0);
+});
+
+probar('rechaza operar sobre una fila cuyo ID no coincide', () => {
+  const { ctx, token } = conPedido();
+  igual(llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-9999', operacion: 'entregar' }).codigo,
+    'CONFLICTO');
+});
+
+console.log('\nPedidos: edición del detalle');
+
+probar('editar recalcula el detalle y el total', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  const r = llamar(ctx, {
+    accion: 'editarPedido', token, fila: 2, id: 'P-0001',
+    items: [{ nombre: 'Almendras', cantidad: 5 }, { nombre: 'Nuez pecán', cantidad: 2 }],
+  });
+  igual(r.detalle, 'Almendras x5; Nuez pecán x2');
+  igual(r.total, 7);
+  igual(valorDe(hojas[1], 2, 'Detalle'), 'Almendras x5; Nuez pecán x2');
+  igual(valorDe(hojas[1], 2, 'Total'), 7);
+});
+
+probar('poner una cantidad en cero saca el producto del pedido', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  llamar(ctx, {
+    accion: 'editarPedido', token, fila: 2, id: 'P-0001',
+    items: [{ nombre: 'Almendras', cantidad: 0 }, { nombre: 'Nuez pecán', cantidad: 4 }],
+  });
+  igual(valorDe(hojas[1], 2, 'Detalle'), 'Nuez pecán x4');
+});
+
+probar('un pedido no puede quedar vacío', () => {
+  const { ctx, token } = conPedido();
+  const r = llamar(ctx, {
+    accion: 'editarPedido', token, fila: 2, id: 'P-0001',
+    items: [{ nombre: 'Almendras', cantidad: 0 }],
+  });
+  igual(r.codigo, 'DATOS_INVALIDOS');
+  afirmar(/Cancelalo/.test(r.error), r.error);
+});
+
+probar('no se edita un pedido ya entregado', () => {
+  const { ctx, token } = conPedido();
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  const r = llamar(ctx, {
+    accion: 'editarPedido', token, fila: 2, id: 'P-0001',
+    items: [{ nombre: 'Almendras', cantidad: 1 }],
+  });
+  igual(r.codigo, 'CONFLICTO');
+});
+
+probar('sin sesión no se opera sobre los pedidos', () => {
+  const { ctx } = conPedido();
+  igual(llamar(ctx, { accion: 'pedidos', token: '' }).codigo, 'SIN_AUTORIZACION');
+  igual(llamar(ctx, { accion: 'estadoPedido', token: '', fila: 2, id: 'P-0001', operacion: 'entregar' }).codigo,
+    'SIN_AUTORIZACION');
+});
+
 console.log('\nMargen (página de catálogo)');
 
 /* Las fórmulas viven dentro de un IIFE en admin.js, así que se extraen del

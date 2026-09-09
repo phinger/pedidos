@@ -107,7 +107,45 @@ button { cursor: pointer; }
   gap: 24px; flex-wrap: wrap;
 }
 
-.titulo h1 { margin: 0; font-size: 24px; letter-spacing: -.02em; }
+/* ── Solapas ─────────────────────────────────────────────────────────── */
+
+.solapas { display: flex; gap: 4px; margin: -4px 0 0 -10px; }
+
+.solapa {
+  padding: 6px 10px;
+  border: 0; border-radius: 8px;
+  background: none;
+  color: var(--tenue);
+  font-size: 22px; font-weight: 650; letter-spacing: -.02em;
+  display: flex; align-items: center; gap: 8px;
+}
+.solapa:hover { color: var(--texto); }
+.solapa[aria-selected="true"] { color: var(--texto); }
+
+.contador {
+  min-width: 22px; height: 22px; padding: 0 7px;
+  display: grid; place-items: center;
+  border-radius: 999px;
+  background: var(--acento); color: #fff;
+  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+/* ── Chips de estado ─────────────────────────────────────────────────── */
+
+.chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+
+.chip {
+  height: 32px; padding: 0 13px;
+  border: 1px solid var(--borde); border-radius: 999px;
+  background: var(--superficie);
+  color: var(--tenue);
+  font-size: 13px; font-weight: 550;
+  display: flex; align-items: center; gap: 7px;
+}
+.chip:hover { color: var(--texto); }
+.chip[aria-selected="true"] { background: var(--texto); border-color: var(--texto); color: var(--fondo); }
+.chip .cuenta { font-variant-numeric: tabular-nums; opacity: .65; }
 .usuario { margin: 2px 0 0; color: var(--tenue); font-size: 13px; }
 
 .acciones { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -275,6 +313,108 @@ tfoot input:focus {
 
 .sin-resultados { color: var(--tenue); text-align: center; padding: 40px; }
 
+/* ── Lista de pedidos ────────────────────────────────────────────────── */
+
+.lista-pedidos { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+
+.pedido {
+  display: grid;
+  grid-template-columns: 100px 130px 1fr auto;
+  gap: 16px;
+  align-items: start;
+  padding: 14px 16px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 11px;
+}
+.pedido[data-status="Entregado"] { opacity: .62; }
+.pedido[data-status="Cancelado"] { opacity: .5; }
+
+.pedido-id {
+  font-family: var(--mono);
+  font-size: 13px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pedido-cuando { color: var(--tenue); font-size: 13px; font-variant-numeric: tabular-nums; }
+.pedido-quien { font-weight: 650; letter-spacing: -.01em; }
+.pedido-items { color: var(--tenue); font-size: 14px; margin-top: 2px; }
+.pedido-mail { color: var(--tenue); font-size: 12px; margin-top: 3px; }
+
+.pedido-derecha { display: flex; align-items: center; gap: 10px; }
+
+.marca-estado {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px; font-weight: 650;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.marca-estado[data-status="Pendiente"] { background: var(--acento); color: #fff; }
+.marca-estado[data-status="Impreso"]   { background: var(--superficie-2); color: var(--texto); border-color: var(--borde); }
+.marca-estado[data-status="Entregado"] { background: none; color: var(--ok); border-color: var(--ok); }
+.marca-estado[data-status="Cancelado"] { background: none; color: var(--tenue); border-color: var(--borde); }
+
+.pedido-acciones { display: flex; gap: 6px; }
+.pedido-acciones .btn { height: 34px; padding: 0 12px; font-size: 14px; }
+.btn-primario { background: var(--acento); border-color: var(--acento); color: #fff; }
+.btn-primario:hover { filter: brightness(1.06); background: var(--acento); }
+.btn:disabled { opacity: .45; cursor: default; }
+
+/* ── Diálogo ─────────────────────────────────────────────────────────── */
+
+.velo {
+  position: fixed; inset: 0; z-index: 30;
+  background: rgba(0,0,0,.45);
+}
+
+.dialogo {
+  position: fixed;
+  z-index: 31;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(460px, calc(100vw - 32px));
+  max-height: min(80vh, 640px);
+  display: flex; flex-direction: column;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  box-shadow: var(--sombra);
+  overflow: hidden;
+}
+
+.dialogo-cabecera { padding: 18px 20px 12px; border-bottom: 1px solid var(--borde); }
+.dialogo-cabecera h2 { margin: 0; font-size: 18px; letter-spacing: -.01em; }
+.dialogo-cabecera p { margin: 2px 0 0; color: var(--tenue); font-size: 13px; }
+
+.dialogo-cuerpo { flex: 1; overflow-y: auto; padding: 6px 20px; }
+
+.item-editable {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--borde);
+}
+.item-editable span { flex: 1; }
+.item-editable input {
+  width: 78px; height: 36px;
+  padding: 0 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--superficie);
+  -moz-appearance: textfield;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.item-editable input::-webkit-outer-spin-button,
+.item-editable input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.item-editable input:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
+.item-editable[data-fuera="true"] span { text-decoration: line-through; color: var(--tenue); }
+
+.dialogo-pie { padding: 14px 20px; border-top: 1px solid var(--borde); }
+.dialogo-botones { display: flex; justify-content: flex-end; gap: 8px; }
+.nota-error { color: var(--peligro); font-size: 13px; margin: 0 0 10px; }
+
 /* ── Pie ─────────────────────────────────────────────────────────────── */
 
 .pie {
@@ -303,6 +443,8 @@ tfoot input:focus {
 .aviso[data-tipo="error"] { background: var(--peligro); color: #fff; }
 
 @media (max-width: 860px) {
+  .pedido { grid-template-columns: 1fr; gap: 8px; }
+  .pedido-derecha { justify-content: space-between; }
   .cabecera, .marco-tabla, .pie { padding-left: 14px; padding-right: 14px; }
   .buscador input { width: 190px; }
   .resumen { gap: 18px; }
