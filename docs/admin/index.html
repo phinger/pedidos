@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Catálogo · Pedidos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101114" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../icons/icon-192.png">
+<link rel="stylesheet" href="admin.css?v=1">
+</head>
+<body>
+
+<div class="cargando" id="cargando">
+  <div class="spinner"></div>
+  <p>Cargando el catálogo…</p>
+</div>
+
+<div class="pantalla-error" id="pantalla-error" hidden>
+  <h1>No se pudo cargar</h1>
+  <p id="error-texto"></p>
+  <button class="btn" id="btn-reintentar">Reintentar</button>
+</div>
+
+<div class="app" id="app" hidden>
+
+  <header class="cabecera">
+    <div class="cabecera-fila">
+      <div class="titulo">
+        <h1>Catálogo</h1>
+        <p class="usuario" id="usuario"></p>
+      </div>
+      <div class="acciones">
+        <label class="buscador">
+          <input id="buscar" type="search" placeholder="Buscar producto o categoría" autocomplete="off">
+        </label>
+        <label class="interruptor">
+          <input type="checkbox" id="ver-inactivos">
+          <span>Ver inactivos</span>
+        </label>
+        <button class="btn btn-fantasma" id="btn-recargar">Recargar</button>
+      </div>
+    </div>
+
+    <dl class="resumen">
+      <div><dt>Productos</dt><dd id="r-productos">—</dd></div>
+      <div><dt>Sin stock</dt><dd id="r-sinstock">—</dd></div>
+      <div><dt>Stock a costo</dt><dd id="r-costo">—</dd></div>
+      <div><dt>Stock a venta</dt><dd id="r-venta">—</dd></div>
+      <div><dt>Margen promedio</dt><dd id="r-margen">—</dd></div>
+    </dl>
+  </header>
+
+  <main class="marco-tabla">
+    <table id="tabla">
+      <thead>
+        <tr>
+          <th class="col-nombre"  data-orden="nombre">Producto</th>
+          <th class="col-texto"   data-orden="categoria">Categoría</th>
+          <th class="col-texto"   data-orden="unidad">Unidad</th>
+          <th class="col-num"     data-orden="stock">Stock</th>
+          <th class="col-num"     data-orden="costo">Costo</th>
+          <th class="col-num"     data-orden="precio">Venta</th>
+          <th class="col-num"     data-orden="margen">Margen</th>
+          <th class="col-activo"  data-orden="activo">Activo</th>
+          <th class="col-estado"><span class="visualmente-oculto">Estado</span></th>
+        </tr>
+      </thead>
+      <tbody id="cuerpo"></tbody>
+    </table>
+    <p class="sin-resultados" id="sin-resultados" hidden>Ningún producto coincide con la búsqueda.</p>
+  </main>
+
+  <footer class="pie">
+    <p>
+      El margen se calcula sobre la venta: <code>venta = costo ÷ (1 − margen)</code>.
+      Los cambios se guardan solos al salir de cada celda.
+    </p>
+  </footer>
+</div>
+
+<div class="aviso" id="aviso" hidden role="status"></div>
+
+<script src="../config.js?v=11"></script>
+<script src="admin.js?v=1"></script>
+</body>
+</html>

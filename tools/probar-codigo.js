@@ -634,6 +634,138 @@ probar('prepararPlanilla se puede correr dos veces sin romper nada', () => {
   afirmar(llamar(ctx, { accion: 'productos', token }).ok, 'la sesión sigue viva');
 });
 
+console.log('\nCatálogo (stock y precios)');
+
+/* Planilla con las columnas comerciales ya cargadas. */
+function entornoCatalogo() {
+  const hojas = hojasDePrueba();
+  hojas[0] = new HojaFalsa('Lista de Productos', [
+    ['NOMBRES', 'Categoría', 'Unidad', 'Activo', 'Stock', 'Costo', 'Precio'],
+    ['Almendras',  'Almacén',    '1 kg',  'SI', 12, 1000, 1800],
+    ['Nuez pecán', 'Almacén',    '500 g', 'SI',  0,  2000, 3000],
+    ['Tofu',       'Frescos',    '400 g', 'NO',  5,  800,  1200],
+  ]);
+  const ctx = construirContexto({
+    hojas, respuestaToken: { codigo: 200, cuerpo: { id_token: jwt(cargaValida('juana@ejemplo.com')) } },
+  });
+  ctx.props.set('CLIENT_ID', CLIENT_ID);
+  ctx.props.set('CLIENT_SECRET', 'secreto');
+  return { ctx, hojas };
+}
+
+probar('devuelve el catálogo completo, inactivos incluidos', () => {
+  const { ctx } = entornoCatalogo();
+  const token = login(ctx).token;
+  const r = llamar(ctx, { accion: 'catalogo', token });
+
+  igual(r.productos.length, 3, 'el inactivo también tiene que venir');
+  igual(r.productos[0], {
+    fila: 2, nombre: 'Almendras', categoria: 'Almacén', unidad: '1 kg',
+    activo: true, orden: null, stock: 12, costo: 1000, precio: 1800,
+  });
+  igual(r.productos[2].activo, false, 'Tofu está inactivo');
+  igual(r.columnas.stock, true, 'debería informar qué columnas existen');
+  igual(r.columnas.orden, false, 'esta planilla no tiene columna de orden');
+});
+
+probar('crea las columnas comerciales si no están', () => {
+  const { ctx, hojas } = nuevoEntorno();     // catálogo sin stock ni precios
+  const token = login(ctx).token;
+  const r = llamar(ctx, { accion: 'catalogo', token });
+
+  igual(hojas[0].datos[0].slice(4), ['Stock', 'Costo', 'Precio'],
+    'debería haberlas agregado al final');
+  igual(r.columnas.costo, true);
+  igual(r.productos[0].costo, null, 'sin valor cargado viene en null');
+});
+
+probar('guarda stock, costo y precio', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  const r = llamar(ctx, {
+    accion: 'guardarProducto', token,
+    fila: 2, nombreOriginal: 'Almendras',
+    campos: { stock: 20, costo: 1100, precio: '2200' },
+  });
+  afirmar(r.ok, r.error);
+  igual(hojas[0].datos[1].slice(4), [20, 1100, 2200]);
+});
+
+probar('guarda el nombre y lo deja como nueva referencia', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, {
+    accion: 'guardarProducto', token,
+    fila: 2, nombreOriginal: 'Almendras', campos: { nombre: 'Almendras tostadas' },
+  });
+  igual(hojas[0].datos[1][0], 'Almendras tostadas');
+
+  /* El segundo guardado tiene que ir con el nombre nuevo. */
+  igual(llamar(ctx, {
+    accion: 'guardarProducto', token,
+    fila: 2, nombreOriginal: 'Almendras', campos: { stock: 1 },
+  }).codigo, 'CONFLICTO', 'con el nombre viejo debería rechazar');
+
+  afirmar(llamar(ctx, {
+    accion: 'guardarProducto', token,
+    fila: 2, nombreOriginal: 'Almendras tostadas', campos: { stock: 1 },
+  }).ok, 'con el nombre nuevo debería aceptar');
+});
+
+probar('rechaza escribir sobre una fila que cambió', () => {
+  const { ctx } = entornoCatalogo();
+  const token = login(ctx).token;
+  const r = llamar(ctx, {
+    accion: 'guardarProducto', token,
+    fila: 2, nombreOriginal: 'Otra cosa', campos: { stock: 5 },
+  });
+  igual(r.codigo, 'CONFLICTO');
+  afirmar(/Actualizá la página/.test(r.error), 'el mensaje debería decir qué hacer');
+});
+
+probar('rechaza números inválidos y nombre vacío', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  const base = { accion: 'guardarProducto', token, fila: 2, nombreOriginal: 'Almendras' };
+
+  igual(llamar(ctx, { ...base, campos: { stock: -3 } }).codigo, 'DATOS_INVALIDOS', 'stock negativo');
+  igual(llamar(ctx, { ...base, campos: { costo: 'gratis' } }).codigo, 'DATOS_INVALIDOS', 'texto');
+  igual(llamar(ctx, { ...base, campos: { nombre: '   ' } }).codigo, 'DATOS_INVALIDOS', 'nombre vacío');
+  igual(hojas[0].datos[1][4], 12, 'nada de eso debería haber tocado la planilla');
+});
+
+probar('vaciar una celda numérica la deja vacía, no en cero', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, {
+    accion: 'guardarProducto', token,
+    fila: 2, nombreOriginal: 'Almendras', campos: { costo: '' },
+  });
+  igual(hojas[0].datos[1][5], '', 'sin costo no es lo mismo que costo cero');
+});
+
+probar('activar y desactivar saca al producto del listado de pedidos', () => {
+  const { ctx } = entornoCatalogo();
+  const token = login(ctx).token;
+  const nombres = () => llamar(ctx, { accion: 'productos', token }).productos.map((p) => p.nombre);
+
+  igual(nombres(), ['Almendras', 'Nuez pecán'], 'Tofu está inactivo');
+  llamar(ctx, {
+    accion: 'guardarProducto', token,
+    fila: 4, nombreOriginal: 'Tofu', campos: { activo: true },
+  });
+  igual(nombres(), ['Almendras', 'Nuez pecán', 'Tofu'], 'al activarlo debería aparecer');
+});
+
+probar('sin sesión no se puede leer ni escribir el catálogo', () => {
+  const { ctx } = entornoCatalogo();
+  igual(llamar(ctx, { accion: 'catalogo', token: '' }).codigo, 'SIN_AUTORIZACION');
+  igual(llamar(ctx, {
+    accion: 'guardarProducto', token: 'x'.repeat(64),
+    fila: 2, nombreOriginal: 'Almendras', campos: { costo: 1 },
+  }).codigo, 'SIN_AUTORIZACION');
+});
+
 console.log('\nEtiquetas');
 
 probar('crea la solapa apuntando a las columnas correctas', () => {
@@ -787,6 +919,51 @@ probar('la vista viva filtra solo por status', () => {
   const formula = hojas.find((h) => h.nombre === 'Etiquetas').formulas['2:1'];
   afirmar(formula.indexOf('="Pendiente"') >= 0, 'debería filtrar por Pendiente: ' + formula);
   afirmar(formula.indexOf('I2:I') < 0, 'ya no debería mirar ninguna columna extra');
+});
+
+console.log('\nMargen (página de catálogo)');
+
+/* Las fórmulas viven dentro de un IIFE en admin.js, así que se extraen del
+   archivo real y se evalúan: probar una copia no probaría nada. */
+const fuenteAdmin = fs.readFileSync(path.join(RAIZ, 'docs', 'admin', 'admin.js'), 'utf8');
+const bloqueMargen = fuenteAdmin.slice(
+  fuenteAdmin.indexOf('const margenDe'),
+  fuenteAdmin.indexOf('const $  ='));
+const { margenDe, ventaDe } = new Function(bloqueMargen + '; return { margenDe, ventaDe };')();
+
+const redondear = (n, d = 6) => (n === null ? null : Number(n.toFixed(d)));
+
+probar('margen = (venta - costo) / venta', () => {
+  igual(redondear(margenDe(100, 200)), 0.5,   'costo 100, venta 200 → 50 %');
+  igual(redondear(margenDe(100, 180)), 0.444444);
+  igual(redondear(margenDe(100, 100)), 0,     'vender al costo es margen cero');
+});
+
+probar('venta = costo / (1 - margen), tal como la definiste', () => {
+  igual(redondear(ventaDe(100, 0.5)), 200);
+  igual(redondear(ventaDe(1000, 0.35)), 1538.461538);
+  igual(redondear(ventaDe(100, 0)), 100);
+});
+
+probar('la ida y vuelta no pierde precisión', () => {
+  [[1000, 1800], [847.5, 1299.99], [12, 100], [99999, 123456]].forEach(([costo, venta]) => {
+    const m = margenDe(costo, venta);
+    igual(redondear(ventaDe(costo, m), 4), redondear(venta, 4),
+      'costo ' + costo + ', venta ' + venta);
+  });
+});
+
+probar('los casos imposibles devuelven null en vez de infinito', () => {
+  igual(ventaDe(100, 1), null, 'margen 100 % sería precio infinito');
+  igual(ventaDe(100, 1.5), null, 'margen mayor a 100 % no existe');
+  igual(ventaDe(null, 0.5), null, 'sin costo no hay venta que calcular');
+  igual(margenDe(100, 0), null, 'venta cero no tiene margen definido');
+  igual(margenDe(null, 200), null);
+});
+
+probar('un margen negativo es válido: se vende a pérdida', () => {
+  igual(redondear(margenDe(200, 100)), -1, 'costo 200 y venta 100 → -100 %');
+  igual(redondear(ventaDe(200, -1)), 100, 'y vuelve');
 });
 
 console.log('\n' + (fallas === 0

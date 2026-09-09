@@ -152,6 +152,48 @@ Después entrá siempre por el ícono.
 
 ---
 
+## Catálogo: stock, costos y precios
+
+**https://phinger.github.io/pedidos/admin/** — pensada para usar desde la
+computadora. También se llega desde la app: **⋮ → Stock y precios**.
+
+Es una tabla editable: se cambia el valor en la celda y se guarda solo al
+salir. Cada fila muestra un tilde cuando terminó de guardar.
+
+### El margen
+
+Se calcula sobre la venta, con la fórmula acordada:
+
+```
+venta  = costo ÷ (1 − margen)
+margen = (venta − costo) ÷ venta
+```
+
+Editar la **venta** recalcula el margen. Editar el **margen** recalcula la
+venta y la guarda. Editar el **costo** recalcula el margen y deja la venta
+donde estaba: así se ve cuánto se comió el aumento antes de decidir si se
+traslada al precio.
+
+El margen no se guarda en la planilla —sería un dato duplicado que se puede
+desincronizar—; se calcula a partir del costo y la venta cada vez.
+
+### Cómo se identifican las filas
+
+Se guarda por número de fila, verificando antes que el nombre siga siendo el
+que la página tenía. Si otra persona editó esa fila mientras tanto, el guardado
+se rechaza en vez de pisarle el cambio.
+
+Se puede editar el nombre. Los pedidos ya cargados guardan el nombre del
+producto como texto, así que renombrar no reescribe los pedidos viejos.
+
+### Sesión
+
+Comparte el `localStorage` con la app de pedidos, que está en el mismo origen.
+Si no hay sesión, la página manda a la app a iniciarla y vuelve sola. Por eso
+Google solo necesita tener registrado un `redirect_uri`, el de la raíz.
+
+---
+
 ## Etiquetas en la Niimbot B1
 
 La solapa **`Etiquetas`** muestra el `Nombre` y el `Detalle` de los pedidos que

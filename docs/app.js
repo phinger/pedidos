@@ -18,6 +18,7 @@ const LS = {
   nombres:   'pedidos.nombres',
   verifier:  'pedidos.pkce_verifier',
   estadoOAuth: 'pedidos.oauth_state',
+  destino:   'pedidos.destino',
 };
 
 const CATALOGO_FRESCO_MS = 5 * 60 * 1000;   // pasado esto, refresca en segundo plano
@@ -272,6 +273,7 @@ async function vincular() {
 }
 
 function entrarEnDemo() {
+  localStorage.removeItem(LS.destino);   // la demo no lleva a ningún lado
   demo = true;
   estado.usuario = { nombre: 'Demo', email: 'modo demo' };
   $('#cinta-demo').hidden = false;
@@ -291,7 +293,20 @@ function cerrarSesion(silencioso) {
 
 /* ── Catálogo ────────────────────────────────────────────────────────── */
 
+/* La página de catálogo comparte origen con esta, así que comparte la sesión
+   de localStorage. Cuando no la tiene, manda acá a iniciarla con ?next=admin y
+   la devolvemos apenas hay token: así Google solo necesita tener registrado un
+   redirect_uri, el de esta página. */
+function volverAlDestino() {
+  const destino = localStorage.getItem(LS.destino);
+  if (destino !== 'admin') return false;
+  localStorage.removeItem(LS.destino);
+  location.href = './admin/';
+  return true;
+}
+
 async function entrarALaApp() {
+  if (volverAlDestino()) return;
   mostrarPantalla('#p-pedido');
   cargarBorrador();
   actualizarNombresRecientes();
@@ -740,12 +755,13 @@ function conectarEventos() {
     const u = estado.usuario;
     /* La versión sirve para saber de un vistazo si el teléfono está corriendo
        el build que se acaba de publicar. */
-    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v10';
+    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v11';
     abrirHoja('#p-menu');
   };
   $('#btn-etiquetas').onclick = generarEtiquetas;
   $('#btn-deshacer-etiquetas').onclick = deshacerEtiquetas;
   $('#btn-cerrar-etiquetas').onclick = cerrarHojas;
+  $('#btn-catalogo').onclick = () => { location.href = './admin/'; };
   $('#btn-refrescar').onclick = () => { cerrarHojas(); refrescarCatalogo(true); };
   $('#btn-vaciar').onclick = () => { cerrarHojas(); vaciarPedido(); aviso('Pedido vaciado'); };
   $('#btn-salir').onclick = () => cerrarSesion(false);
@@ -765,6 +781,9 @@ async function iniciar() {
   conectarEventos();
 
   const params = new URLSearchParams(location.search);
+
+  /* Se guarda antes del rodeo por Google, que se lleva puesta la query. */
+  if (params.get('next') === 'admin') localStorage.setItem(LS.destino, 'admin');
 
   if (params.get('demo') === '1') { entrarEnDemo(); return; }
   if (!CONFIGURADO) {

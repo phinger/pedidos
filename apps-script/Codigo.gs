@@ -17,7 +17,7 @@
 /* Se sube a mano con cada cambio que haya que publicar. doGet lo devuelve, así
    que abriendo la URL /exec en el navegador se ve qué versión está realmente
    publicada — que no es lo mismo que la que muestra el editor. */
-const VERSION_API = 3;
+const VERSION_API = 4;
 
 const CFG = {
   /* ── Solapas ──────────────────────────────────────────────────────── */
@@ -37,7 +37,14 @@ const CFG = {
     unidad:    ['unidad', 'presentacion', 'medida', 'envase'],
     activo:    ['activo', 'habilitado', 'visible', 'vigente'],
     orden:     ['orden', 'posicion'],
+    stock:     ['stock', 'existencia', 'cantidad'],
+    costo:     ['costo', 'preciocosto', 'costounitario'],
+    precio:    ['precio', 'precioventa', 'venta', 'pvp'],
   },
+
+  /* Columnas del catálogo que la página de administración necesita y que se
+     crean solas si no están. */
+  COLS_A_CREAR: ['Stock', 'Costo', 'Precio'],
   COLS_PEDIDOS: {
     id:      ['id', 'idpedido', 'pedido', 'numero'],               // requerida
     fecha:   ['fecha'],                                            // requerida
@@ -97,6 +104,8 @@ function doPost(e) {
     if (accion === 'pedido')     return _salida(accionPedido(cuerpo, sesion));
     if (accion === 'etiquetas')  return _salida(_exportarEtiquetas());
     if (accion === 'deshacer')   return _salida(_deshacerUltimoLote());
+    if (accion === 'catalogo')   return _salida(accionCatalogo());
+    if (accion === 'guardarProducto') return _salida(accionGuardarProducto(cuerpo, sesion));
     if (accion === 'estructura') return _salida(accionEstructura());
 
     /* Casi siempre significa que el código está guardado pero no publicado:
@@ -535,6 +544,152 @@ function _copiarStatus(hoja, encabezados, filaNueva) {
 
 
 /* ═══════════════════════════════════════════════════════════════════════
+   Administración del catálogo
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/** Crea al final las columnas de COLS_A_CREAR que falten. Idempotente. */
+function _asegurarColumnasProductos(hoja) {
+  let ancho = Math.max(1, hoja.getLastColumn());
+  let encabezados = hoja.getRange(1, 1, 1, ancho).getValues()[0].map(_normalizar);
+
+  CFG.COLS_A_CREAR.forEach(function (titulo) {
+    const campo = _normalizar(titulo);
+    if (_buscarColumna(encabezados, CFG.COLS_PRODUCTOS[campo] || [campo]) >= 0) return;
+    hoja.getRange(1, ancho + 1).setValue(titulo).setFontWeight('bold');
+    ancho++;
+    encabezados = hoja.getRange(1, 1, 1, ancho).getValues()[0].map(_normalizar);
+  });
+}
+
+function _numero(valor) {
+  if (valor === '' || valor === null || valor === undefined) return null;
+  const n = Number(String(valor).toString().replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+
+/**
+ * Catálogo completo para la página de administración: incluye los inactivos y
+ * los datos comerciales, y devuelve el número de fila de cada producto para
+ * poder escribir después sobre la fila exacta.
+ */
+function accionCatalogo() {
+  const hoja = _hoja(CFG.HOJA_PRODUCTOS);
+  _asegurarColumnasProductos(hoja);
+
+  const valores = hoja.getDataRange().getValues();
+  if (valores.length < 2) return { ok: true, productos: [], columnas: {} };
+
+  const encabezados = valores[0].map(_normalizar);
+  const col = _mapearColumnas(encabezados, CFG.COLS_PRODUCTOS);
+  if (col.nombre < 0) {
+    throw _error('No encontré la columna de nombre en "' + CFG.HOJA_PRODUCTOS + '".', 'SIN_CONFIG');
+  }
+
+  const productos = [];
+  for (let i = 1; i < valores.length; i++) {
+    const fila = valores[i];
+    const nombre = String(fila[col.nombre] || '').trim();
+    if (!nombre) continue;
+
+    productos.push({
+      fila: i + 1,
+      nombre: nombre,
+      categoria: col.categoria >= 0 ? String(fila[col.categoria] || '').trim() : '',
+      unidad: col.unidad >= 0 ? String(fila[col.unidad] || '').trim() : '',
+      activo: col.activo >= 0 ? _esVerdadero(fila[col.activo]) : true,
+      orden: col.orden >= 0 ? _numero(fila[col.orden]) : null,
+      stock: col.stock >= 0 ? _numero(fila[col.stock]) : null,
+      costo: col.costo >= 0 ? _numero(fila[col.costo]) : null,
+      precio: col.precio >= 0 ? _numero(fila[col.precio]) : null,
+    });
+  }
+
+  /* La página necesita saber qué campos existen para no ofrecer editar
+     columnas que la planilla no tiene. */
+  const columnas = {};
+  for (const campo in col) columnas[campo] = col[campo] >= 0;
+
+  return { ok: true, productos: productos, columnas: columnas };
+}
+
+/**
+ * Guarda los cambios de un producto.
+ *
+ * Se identifica por número de fila, pero antes se verifica que el nombre siga
+ * siendo el que la página tenía: si otra persona editó esa fila mientras
+ * tanto, se rechaza en vez de pisarle el cambio.
+ */
+function accionGuardarProducto(p, sesion) {
+  const fila = Math.floor(Number(p.fila));
+  if (!(fila >= 2)) throw _error('Fila inválida.', 'DATOS_INVALIDOS');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) throw _error('El servidor está ocupado. Probá de nuevo.', 'OCUPADO');
+
+  try {
+    const hoja = _hoja(CFG.HOJA_PRODUCTOS);
+    _asegurarColumnasProductos(hoja);
+
+    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map(_normalizar);
+    const col = _mapearColumnas(encabezados, CFG.COLS_PRODUCTOS);
+    if (fila > hoja.getLastRow()) throw _error('Esa fila ya no existe.', 'CONFLICTO');
+
+    const nombreActual = String(hoja.getRange(fila, col.nombre + 1).getValue() || '').trim();
+    if (String(p.nombreOriginal || '').trim() !== nombreActual) {
+      throw _error('Alguien más cambió este producto. Actualizá la página y probá de nuevo.', 'CONFLICTO');
+    }
+
+    const campos = p.campos || {};
+    const escrito = {};
+
+    if (campos.nombre !== undefined) {
+      const nombre = String(campos.nombre).trim();
+      if (!nombre) throw _error('El nombre no puede quedar vacío.', 'DATOS_INVALIDOS');
+      if (nombre.length > 200) throw _error('El nombre es demasiado largo.', 'DATOS_INVALIDOS');
+      hoja.getRange(fila, col.nombre + 1).setValue(nombre);
+      escrito.nombre = nombre;
+    }
+
+    ['categoria', 'unidad'].forEach(function (campo) {
+      if (campos[campo] === undefined || col[campo] < 0) return;
+      hoja.getRange(fila, col[campo] + 1).setValue(String(campos[campo]).trim());
+      escrito[campo] = String(campos[campo]).trim();
+    });
+
+    ['stock', 'costo', 'precio', 'orden'].forEach(function (campo) {
+      if (campos[campo] === undefined || col[campo] < 0) return;
+      if (campos[campo] === null || campos[campo] === '') {
+        hoja.getRange(fila, col[campo] + 1).clearContent();
+        escrito[campo] = null;
+        return;
+      }
+      const n = _numero(campos[campo]);
+      if (n === null || n < 0) {
+        throw _error('El valor de ' + campo + ' tiene que ser un número no negativo.', 'DATOS_INVALIDOS');
+      }
+      hoja.getRange(fila, col[campo] + 1).setValue(n);
+      escrito[campo] = n;
+    });
+
+    if (campos.activo !== undefined && col.activo >= 0) {
+      const activo = campos.activo === true || campos.activo === 'true';
+      hoja.getRange(fila, col.activo + 1).setValue(activo ? 'SI' : 'NO');
+      escrito.activo = activo;
+    }
+
+    /* El catálogo que sirve la app queda viejo: se limpia para que la próxima
+       lectura traiga los precios y el stock nuevos. */
+    CacheService.getScriptCache().remove('catalogo');
+    SpreadsheetApp.flush();
+
+    return { ok: true, fila: fila, campos: escrito };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
    Diagnóstico
    ═══════════════════════════════════════════════════════════════════════ */
 
@@ -866,6 +1021,15 @@ function prepararPlanilla() {
   } else {
     informe.push('Usuarios: ya tenía encabezados.');
   }
+
+  /* ── Catálogo ── */
+  const hojaCatalogo = _hoja(CFG.HOJA_PRODUCTOS);
+  const anchoAntes = hojaCatalogo.getLastColumn();
+  _asegurarColumnasProductos(hojaCatalogo);
+  const agregadas = hojaCatalogo.getLastColumn() - anchoAntes;
+  informe.push(agregadas
+    ? 'Catálogo: se agregaron ' + agregadas + ' columna(s) (' + CFG.COLS_A_CREAR.join(', ') + ').'
+    : 'Catálogo: ya tenía las columnas de stock y precios.');
 
   CacheService.getScriptCache().remove('allowlist');
   SpreadsheetApp.flush();
