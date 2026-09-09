@@ -2,7 +2,7 @@
    Ver README.md → "Pasos manuales". */
 window.PEDIDOS_CONFIG = {
   /* URL del Web App de Apps Script, terminada en /exec */
-  apiUrl:   'https://script.google.com/macros/s/AKfycbzukXbmtZoEtbqyyd-KO6KftZLaS53-YuRV2mTrKThcLzUB_7BPiYM1tIeFAGMTJRGf/exec',
+  apiUrl:   'https://script.google.com/macros/s/AKfycbzpeRWS0jtytHH2NmoDPSLpmmcqiIaOBGHSOY9eFgcX4UpwT9bPEGeFaAkuqY6SlmE/exec',
 
   /* Client ID del cliente OAuth 2.0 (tipo Web) de Google Cloud */
   clientId: '938884961121-4mkkgm298jcqgql6jq9p9vps45e3gncu.apps.googleusercontent.com',
