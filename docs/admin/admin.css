@@ -67,6 +67,22 @@ button { cursor: pointer; }
 }
 .pantalla-error h1 { color: var(--texto); font-size: 22px; margin: 0; }
 
+.diagnostico {
+  max-width: min(640px, 90vw);
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--tenue);
+}
+
 .spinner {
   width: 26px; height: 26px; border-radius: 50%;
   border: 2.5px solid var(--borde);

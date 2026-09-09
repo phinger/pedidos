@@ -41,6 +41,11 @@ const numero = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 /* ── API ─────────────────────────────────────────────────────────────── */
 
 async function api(accion, datos = {}) {
+  if (!CFG.apiUrl || CFG.apiUrl.indexOf('PEGAR_') >= 0) {
+    throw new Error('La página no tiene configurada la URL del servidor. ' +
+      'Revisá que config.js se esté cargando.');
+  }
+
   const cuerpo = JSON.stringify({
     accion,
     token: localStorage.getItem(LS.token) || '',
@@ -58,7 +63,12 @@ async function api(accion, datos = {}) {
   } catch {
     throw Object.assign(new Error('Sin conexión con el servidor.'), { red: true });
   }
-  if (!respuesta.ok) throw new Error('El servidor respondió ' + respuesta.status + '.');
+  if (!respuesta.ok) {
+    /* Un 404 acá casi siempre es una implementación de Apps Script vieja o
+       archivada: la URL existe pero ya no responde. Se muestra cuál se usó
+       para no tener que adivinar. */
+    throw new Error('El servidor respondió ' + respuesta.status + ' en ' + CFG.apiUrl);
+  }
 
   const json = await respuesta.json();
   if (!json.ok) {
@@ -104,6 +114,26 @@ async function cargar() {
     $('#cargando').hidden = true;
     $('#pantalla-error').hidden = false;
     $('#error-texto').textContent = e.message;
+    diagnosticar();
+  }
+}
+
+/* Pregunta directa al servidor qué versión tiene publicada. Distingue de un
+   vistazo entre "la URL está mal" y "el código publicado está viejo". */
+async function diagnosticar() {
+  const caja = $('#diagnostico');
+  caja.hidden = false;
+  caja.textContent = 'Servidor configurado: ' + (CFG.apiUrl || '(ninguno)') + '\nComprobando…';
+  if (!CFG.apiUrl) return;
+
+  try {
+    const r = await fetch(CFG.apiUrl, { redirect: 'follow' });
+    const texto = await r.text();
+    caja.textContent = 'Servidor configurado: ' + CFG.apiUrl +
+      '\nRespuesta: ' + r.status + ' ' + texto.slice(0, 160);
+  } catch (e) {
+    caja.textContent = 'Servidor configurado: ' + CFG.apiUrl +
+      '\nNo respondió: ' + e.message;
   }
 }
 

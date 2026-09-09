@@ -1,6 +1,6 @@
 /* Service worker: deja la app abriendo instantánea.
    Al publicar cambios, subir VERSION para invalidar el caché. */
-const VERSION = 'pedidos-v12';
+const VERSION = 'pedidos-v13';
 
 /* Los assets van versionados desde index.html: es lo único que le gana a un
    service worker viejo que quedó sirviendo caché-primero, porque esa URL no
@@ -9,9 +9,9 @@ const VERSION = 'pedidos-v12';
 const RECURSOS = [
   './',
   './index.html',
-  './styles.css?v=12',
-  './app.js?v=12',
-  './config.js?v=12',
+  './styles.css?v=13',
+  './app.js?v=13',
+  './config.js?v=13',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -57,10 +57,14 @@ self.addEventListener('fetch', (e) => {
       .then((respuesta) => {
         if (respuesta && respuesta.status === 200) {
           const copia = respuesta.clone();
-          caches.open(VERSION).then((c) => c.put(navegacion ? './index.html' : e.request, copia));
+          /* Se guarda bajo su propia URL: antes toda navegación se archivaba
+             como './index.html', así que entrar a /admin/ pisaba la copia
+             offline de la app de pedidos con la del catálogo. */
+          caches.open(VERSION).then((c) => c.put(e.request, copia));
         }
         return respuesta;
       })
-      .catch(() => caches.match(navegacion ? './index.html' : e.request))
+      .catch(() => caches.match(e.request)
+        .then((hallado) => hallado || (navegacion ? caches.match('./index.html') : undefined)))
   );
 });
