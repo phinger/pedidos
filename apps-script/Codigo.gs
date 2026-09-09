@@ -17,7 +17,7 @@
 /* Se sube a mano con cada cambio que haya que publicar. doGet lo devuelve, así
    que abriendo la URL /exec en el navegador se ve qué versión está realmente
    publicada — que no es lo mismo que la que muestra el editor. */
-const VERSION_API = 5;
+const VERSION_API = 6;
 
 const CFG = {
   /* ── Solapas ──────────────────────────────────────────────────────── */
@@ -412,6 +412,9 @@ function accionProductos() {
       nombre: nombre,
       categoria: col.categoria >= 0 ? String(fila[col.categoria] || '').trim() : '',
       unidad: col.unidad >= 0 ? String(fila[col.unidad] || '').trim() : '',
+      /* null = sin seguimiento de stock, y entonces no limita nada.
+         0 = agotado. Son cosas distintas y la app las trata distinto. */
+      stock: col.stock >= 0 ? _numero(fila[col.stock]) : null,
       orden: col.orden >= 0 ? Number(fila[col.orden]) || 0 : i,
     });
   }
@@ -448,7 +451,7 @@ function accionPedido(p, sesion) {
   /* El nombre de cada producto se toma del catálogo, no de lo que mandó el
      cliente: la planilla queda consistente aunque el borrador esté viejo. */
   const catalogo = {};
-  accionProductos().productos.forEach(function (prod) { catalogo[prod.id] = prod.nombre; });
+  accionProductos().productos.forEach(function (prod) { catalogo[prod.id] = prod; });
 
   const lineas = [];
   let total = 0;
@@ -457,8 +460,17 @@ function accionPedido(p, sesion) {
     if (!(cantidad >= 1 && cantidad <= CFG.MAX_CANTIDAD)) {
       throw _error('Cantidad inválida en el pedido.', 'DATOS_INVALIDOS');
     }
-    const nombreProducto = catalogo[items[i].id] || String(items[i].nombre || '').trim();
+    const prod = catalogo[items[i].id];
+    const nombreProducto = prod ? prod.nombre : String(items[i].nombre || '').trim();
     if (!nombreProducto) throw _error('Hay un producto que ya no está en el catálogo.', 'DATOS_INVALIDOS');
+
+    /* El tope también se valida acá: el teléfono puede tener el catálogo
+       viejo, o el stock puede haber cambiado mientras armaban el pedido. */
+    if (prod && prod.stock !== null && cantidad > prod.stock) {
+      throw _error(prod.stock > 0
+        ? 'De ' + nombreProducto + ' quedan ' + prod.stock + '. Ajustá la cantidad y reintentá.'
+        : 'Ya no queda stock de ' + nombreProducto + '.', 'SIN_STOCK');
+    }
     lineas.push(nombreProducto + ' x' + cantidad);
     total += cantidad;
   }

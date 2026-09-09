@@ -276,6 +276,12 @@ a.btn          { text-decoration: none; }
   background: var(--acento-suave);
 }
 
+/* Agotado: se sigue viendo, para que se entienda que el producto existe y
+   que justo no hay, en vez de parecer que lo borraron del catálogo. */
+.item[data-agotado="true"] { background: none; box-shadow: none; }
+.item[data-agotado="true"] .item-nombre { color: var(--tenue); }
+.item[data-agotado="true"] .item-meta { color: var(--tenue); font-weight: 600; }
+
 .item-info { flex: 1; min-width: 0; }
 .item-nombre {
   font-weight: 600; letter-spacing: -.01em;
@@ -305,6 +311,13 @@ a.btn          { text-decoration: none; }
 .stepper button:active { transform: scale(.88); background: var(--acento-suave); }
 .stepper .btn-mas { background: var(--acento); color: var(--acento-texto); }
 .stepper .btn-mas:active { background: var(--acento); }
+
+.stepper button:disabled {
+  background: var(--superficie-2);
+  color: var(--tenue);
+  opacity: .55;
+}
+.stepper button:disabled:active { transform: none; }
 
 .stepper .cantidad {
   min-width: 30px;

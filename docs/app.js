@@ -88,6 +88,12 @@ const guardarJSON = (clave, valor) => {
 const normalizar = (s) => (s || '').toString().toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+/* Un producto sin stock cargado (null) no tiene seguimiento y no limita nada.
+   Con 0 está agotado. Son situaciones distintas y se muestran distinto. */
+const tieneStock = (p) => p.stock !== null && p.stock !== undefined;
+const agotado    = (p) => tieneStock(p) && p.stock <= 0;
+const tope       = (p) => (tieneStock(p) ? p.stock : Infinity);
+
 const esStandalone = () =>
   window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
@@ -351,13 +357,30 @@ async function refrescarCatalogo(manual) {
 function aplicarCatalogo(productos) {
   estado.productos = productos;
 
-  /* Si un producto desapareció del catálogo, sacamos su cantidad del borrador. */
-  const vigentes = new Set(productos.map((p) => p.id));
+  /* Si un producto desapareció del catálogo, sacamos su cantidad del borrador.
+     Y si mientras tanto bajó el stock, recortamos lo que ya no entra: es
+     preferible avisar acá que al confirmar el pedido. */
+  const porId = new Map(productos.map((p) => [p.id, p]));
   let cambio = false;
+  let recortados = 0;
+
   for (const id of Object.keys(estado.cantidades)) {
-    if (!vigentes.has(id)) { delete estado.cantidades[id]; cambio = true; }
+    const p = porId.get(id);
+    if (!p) { delete estado.cantidades[id]; cambio = true; continue; }
+    const maximo = tope(p);
+    if (estado.cantidades[id] > maximo) {
+      cambio = true;
+      recortados++;
+      if (maximo <= 0) delete estado.cantidades[id];
+      else estado.cantidades[id] = maximo;
+    }
   }
   if (cambio) guardarBorrador();
+  if (recortados) {
+    aviso(recortados === 1
+      ? 'Un producto se ajustó al stock disponible'
+      : recortados + ' productos se ajustaron al stock disponible');
+  }
 
   renderChips();
   renderLista();
@@ -430,10 +453,12 @@ function renderLista() {
 
 function crearFila(p) {
   const cantidad = estado.cantidades[p.id] || 0;
+  const sinStock = agotado(p);
 
   const fila = document.createElement('article');
   fila.className = 'item';
   fila.dataset.elegido = String(cantidad > 0);
+  fila.dataset.agotado = String(sinStock);
 
   const info = document.createElement('div');
   info.className = 'item-info';
@@ -443,11 +468,14 @@ function crearFila(p) {
   nombre.textContent = p.nombre;
   info.appendChild(nombre);
 
-  const detalle = [p.categoria, p.unidad].filter(Boolean).join(' · ');
-  if (detalle) {
+  const partes = [p.categoria, p.unidad].filter(Boolean);
+  if (sinStock) partes.push('Sin stock');
+  else if (tieneStock(p)) partes.push(p.stock + ' disponibles');
+
+  if (partes.length) {
     const meta = document.createElement('div');
     meta.className = 'item-meta';
-    meta.textContent = detalle;
+    meta.textContent = partes.join(' · ');
     info.appendChild(meta);
   }
 
@@ -472,19 +500,29 @@ function crearFila(p) {
   mas.type = 'button';
   mas.textContent = '+';
   mas.setAttribute('aria-label', 'Agregar uno de ' + p.nombre);
+  mas.disabled = sinStock || cantidad >= tope(p);
   mas.onclick = () => cambiarCantidad(p.id, +1);
 
   stepper.append(menos, cantidadEl, mas);
   fila.append(info, stepper);
 
-  filas.set(p.id, { fila, cantidadEl, stepper });
+  filas.set(p.id, { fila, cantidadEl, stepper, mas, producto: p });
   return fila;
 }
 
 function cambiarCantidad(id, delta) {
+  const producto = estado.productos.find((x) => x.id === id);
+  const maximo = Math.min(999, producto ? tope(producto) : 999);
+
   const previa = estado.cantidades[id] || 0;
-  const nueva = Math.min(999, Math.max(0, previa + delta));
-  if (nueva === previa) return;
+  const nueva = Math.min(maximo, Math.max(0, previa + delta));
+
+  if (nueva === previa) {
+    if (delta > 0 && previa >= maximo) {
+      aviso(maximo <= 0 ? 'Sin stock' : 'Es todo el stock que hay: ' + maximo);
+    }
+    return;
+  }
 
   if (nueva === 0) delete estado.cantidades[id];
   else estado.cantidades[id] = nueva;
@@ -494,6 +532,7 @@ function cambiarCantidad(id, delta) {
     ref.cantidadEl.textContent = String(nueva);
     ref.stepper.dataset.cero = String(nueva === 0);
     ref.fila.dataset.elegido = String(nueva > 0);
+    ref.mas.disabled = nueva >= maximo;
     ref.cantidadEl.classList.remove('pulso');
     void ref.cantidadEl.offsetWidth;      // reinicia la animación
     ref.cantidadEl.classList.add('pulso');
@@ -648,6 +687,10 @@ async function confirmar() {
       ? 'No hay conexión. Revisá la señal y tocá Confirmar de nuevo: no se va a duplicar.'
       : e.message;
     err.hidden = false;
+
+    /* El stock cambió mientras armaban el pedido: se trae el catálogo nuevo
+       para que el listado deje de mostrar algo que ya no está. */
+    if (e.codigo === 'SIN_STOCK') refrescarCatalogo(false);
   } finally {
     estado.enviando = false;
     boton.disabled = false;
@@ -755,7 +798,7 @@ function conectarEventos() {
     const u = estado.usuario;
     /* La versión sirve para saber de un vistazo si el teléfono está corriendo
        el build que se acaba de publicar. */
-    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v15';
+    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v16';
     abrirHoja('#p-menu');
   };
   $('#btn-etiquetas').onclick = generarEtiquetas;

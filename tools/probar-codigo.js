@@ -414,6 +414,79 @@ probar('con un solo valor cargado, la columna Activo pasa a mandar', () => {
     ['Almendras'], 'las filas en blanco quedan afuera');
 });
 
+console.log('\nStock en los pedidos');
+
+probar('el catálogo de la app informa el stock', () => {
+  const { ctx } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+
+  igual(productos.map((p) => [p.nombre, p.stock]),
+    [['Almendras', 12], ['Nuez pecán', 0]],
+    'el agotado sigue en el listado, con stock 0');
+});
+
+probar('sin columna de stock, el stock viaja en null', () => {
+  const { ctx } = nuevoEntorno();
+  const token = login(ctx).token;
+  igual(llamar(ctx, { accion: 'productos', token }).productos[0].stock, null,
+    'null significa sin seguimiento, no agotado');
+});
+
+probar('rechaza pedir más de lo que hay', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+
+  const r = llamar(ctx, {
+    accion: 'pedido', token, nombre: 'Gimena', clave: 'k1',
+    items: [{ id: productos[0].id, cantidad: 20 }],       // hay 12
+  });
+  igual(r.codigo, 'SIN_STOCK');
+  afirmar(/quedan 12/.test(r.error), 'debería decir cuántos quedan: ' + r.error);
+  igual(hojas[1].getLastRow(), 1, 'no debería haber escrito el pedido');
+});
+
+probar('rechaza pedir algo agotado, con otro mensaje', () => {
+  const { ctx } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+
+  const r = llamar(ctx, {
+    accion: 'pedido', token, nombre: 'Gimena', clave: 'k1',
+    items: [{ id: productos[1].id, cantidad: 1 }],        // Nuez pecán, stock 0
+  });
+  igual(r.codigo, 'SIN_STOCK');
+  afirmar(/Ya no queda stock/.test(r.error), r.error);
+});
+
+probar('pedir exactamente el stock disponible se acepta', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+
+  const r = llamar(ctx, {
+    accion: 'pedido', token, nombre: 'Gimena', clave: 'k1',
+    items: [{ id: productos[0].id, cantidad: 12 }],
+  });
+  afirmar(r.ok, r.error);
+  igual(valorDe(hojas[1], 2, 'Detalle'), 'Almendras x12');
+});
+
+probar('sin seguimiento de stock no hay tope', () => {
+  const { ctx } = nuevoEntorno();
+  const token = login(ctx).token;
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+  afirmar(llamar(ctx, {
+    accion: 'pedido', token, nombre: 'Gimena', clave: 'k1',
+    items: [{ id: productos[0].id, cantidad: 500 }],
+  }).ok, 'sin columna de stock debería dejar pedir cualquier cantidad');
+});
+
 console.log('\nAlta de pedidos');
 
 const pedidoDe = (ctx, token, nombre, clave) => {
