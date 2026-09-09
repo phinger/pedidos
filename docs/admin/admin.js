@@ -144,7 +144,7 @@ function visibles() {
   let lista = estado.productos.filter((p) => {
     if (!estado.verInactivos && !p.activo) return false;
     if (!q) return true;
-    return (p.nombre + ' ' + p.categoria).toLowerCase().includes(q);
+    return (p.codigo + ' ' + p.nombre + ' ' + p.categoria).toLowerCase().includes(q);
   });
 
   const { campo, asc } = estado.orden;
@@ -171,6 +171,7 @@ function render() {
   cuerpo.appendChild(frag);
 
   $('#sin-resultados').hidden = lista.length > 0;
+  renderFilaNueva();
   renderResumen();
   renderOrden();
 }
@@ -233,9 +234,9 @@ function crearFila(p) {
     return td;
   };
 
+  tr.appendChild(campoTexto('codigo', 'col-codigo'));
   tr.appendChild(campoTexto('nombre'));
   tr.appendChild(campoTexto('categoria', 'col-texto'));
-  tr.appendChild(campoTexto('unidad', 'col-texto'));
 
   /* ── Números ── */
   const entradas = {};
@@ -330,6 +331,104 @@ function crearFila(p) {
   return tr;
 }
 
+/* ── Alta de productos ───────────────────────────────────────────────── */
+
+/* Una fila vacía al pie: se completa y, al salir del campo, el producto se
+   crea y aparece una fila vacía nueva. No hay botón de "agregar" porque la
+   fila misma es la invitación. */
+function renderFilaNueva() {
+  const pie = $('#pie-alta');
+  pie.innerHTML = '';
+
+  const tr = document.createElement('tr');
+  const borrador = {};
+  const entradas = {};
+
+  const campo = (nombre, tipo, marcador, clase) => {
+    const td = celda(clase);
+    const input = document.createElement('input');
+    input.type = tipo;
+    input.placeholder = marcador || '';
+    input.setAttribute('aria-label', 'nuevo producto: ' + nombre);
+    if (tipo === 'number') { input.step = '0.01'; input.min = '0'; }
+    if (estado.columnas[nombre] === false) input.disabled = true;
+
+    input.addEventListener('input', () => { borrador[nombre] = input.value; });
+    input.addEventListener('change', () => { borrador[nombre] = input.value; intentarCrear(); });
+
+    entradas[nombre] = input;
+    td.appendChild(input);
+    return td;
+  };
+
+  tr.appendChild(campo('codigo', 'text', 'Código', 'col-codigo'));
+  tr.appendChild(campo('nombre', 'text', 'Nuevo producto…'));
+  tr.appendChild(campo('categoria', 'text', '', 'col-texto'));
+  tr.appendChild(campo('stock', 'number', '', 'col-num'));
+  tr.appendChild(campo('costo', 'number', '', 'col-num'));
+  tr.appendChild(campo('precio', 'number', '', 'col-num'));
+
+  /* El margen de la fila nueva se muestra pero no se edita: sin producto
+     todavía creado no hay nada que recalcular hacia atrás. */
+  const tdMargen = celda('col-num derivado');
+  const salidaMargen = document.createElement('input');
+  salidaMargen.type = 'text';
+  salidaMargen.readOnly = true;
+  salidaMargen.tabIndex = -1;
+  salidaMargen.setAttribute('aria-label', 'margen del nuevo producto');
+  tdMargen.appendChild(salidaMargen);
+  tr.appendChild(tdMargen);
+
+  const pintar = () => {
+    const costo = entradas.costo.value === '' ? null : Number(entradas.costo.value);
+    const venta = entradas.precio.value === '' ? null : Number(entradas.precio.value);
+    const m = margenDe(costo, venta);
+    salidaMargen.value = m === null ? '' : (m * 100).toFixed(1);
+  };
+  entradas.costo.addEventListener('input', pintar);
+  entradas.precio.addEventListener('input', pintar);
+
+  tr.appendChild(celda('col-activo'));
+
+  const tdEstado = celda('col-estado');
+  const marca = document.createElement('div');
+  marca.className = 'estado';
+  tdEstado.appendChild(marca);
+  tr.appendChild(tdEstado);
+
+  let creando = false;
+
+  async function intentarCrear() {
+    if (creando) return;
+    if (!String(borrador.nombre || '').trim()) {
+      /* Con datos cargados pero sin nombre, se avisa en vez de perderlos. */
+      if (Object.values(borrador).some((v) => String(v || '').trim())) {
+        aviso('Falta el nombre del producto', 'error');
+        entradas.nombre.focus();
+      }
+      return;
+    }
+
+    creando = true;
+    marca.dataset.estado = 'guardando';
+    try {
+      const r = await api('crearProducto', { campos: borrador });
+      estado.productos.push(r.producto);
+      aviso(r.producto.nombre + ' agregado');
+      render();                                   // redibuja e inserta una fila vacía nueva
+      $('#pie-alta').querySelector('input').focus();
+    } catch (e) {
+      creando = false;
+      if (e.codigo === 'SIN_AUTORIZACION') return;
+      marca.dataset.estado = 'error';
+      aviso(e.message, 'error');
+      entradas.nombre.focus();
+    }
+  }
+
+  pie.appendChild(tr);
+}
+
 /* ── Guardado ────────────────────────────────────────────────────────── */
 
 const temporizadores = new Map();
@@ -401,7 +500,7 @@ function conectarEventos() {
   });
 
   /* Enter confirma y baja a la misma columna de la fila siguiente. */
-  $('#cuerpo').addEventListener('keydown', (e) => {
+  $('#tabla').addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
     e.preventDefault();
     e.target.blur();

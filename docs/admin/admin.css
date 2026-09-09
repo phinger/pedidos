@@ -182,6 +182,7 @@ thead th[aria-sort="descending"]::after { content: "↓"; }
 .col-activo, .col-estado { text-align: center; }
 .col-estado { width: 34px; }
 .col-num { width: 116px; }
+.col-codigo { width: 120px; }
 .col-texto { width: 160px; }
 .col-activo { width: 66px; }
 
@@ -235,6 +236,42 @@ td.derivado input:focus { color: var(--texto); }
 .estado[data-estado="guardado"]::before  { content: "✓"; color: var(--ok); }
 .estado[data-estado="error"]::before     { content: "!"; color: var(--peligro); font-weight: 700; }
 @keyframes latir { 50% { opacity: .25; } }
+
+/* ── Fila de alta ────────────────────────────────────────────────────── */
+
+tfoot td {
+  padding: 0;
+  border-top: 2px dashed var(--borde);
+  background: none;
+}
+tfoot input::placeholder { color: var(--tenue); opacity: .8; }
+tfoot .estado[data-estado="guardando"]::before { content: "•"; }
+
+tbody input[type="text"], tbody input[type="number"],
+tfoot input[type="text"], tfoot input[type="number"] { width: 100%; }
+
+tfoot input {
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+}
+tfoot input[type="number"] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  -webkit-appearance: none;
+  appearance: none;
+}
+tfoot input::-webkit-outer-spin-button,
+tfoot input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+tfoot input:hover { border-color: var(--borde); }
+tfoot input:focus {
+  outline: none;
+  border-color: var(--acento);
+  background: var(--superficie);
+}
 
 .sin-resultados { color: var(--tenue); text-align: center; padding: 40px; }
 

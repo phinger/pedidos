@@ -45,6 +45,10 @@ class HojaFalsa {
   setFrozenRows() { return this; }
   clear() { this.datos = [[]]; this.formulas = {}; return this; }
   setColumnWidth() { return this; }
+  insertColumnBefore(col) {
+    this.datos.forEach((fila) => fila.splice(col - 1, 0, ''));
+    return this;
+  }
   insertRowBefore(fila) {
     const ancho = this.datos[0] ? this.datos[0].length : 0;
     this.datos.splice(fila - 1, 0, new Array(ancho).fill(''));
@@ -261,6 +265,14 @@ function nuevoEntorno(email = 'juana@ejemplo.com') {
   ctx.props.set('CLIENT_SECRET', 'secreto');
   return { ctx, hojas };
 }
+
+/* Las pruebas ubican las columnas por su encabezado: si mañana se inserta una
+   columna nueva, no hay que renumerar cada aserción. */
+const valorDe = (hoja, fila, titulo) => {
+  const i = hoja.datos[0].findIndex((h) => String(h).toLowerCase() === titulo.toLowerCase());
+  if (i < 0) throw new Error('No existe la columna "' + titulo + '" en ' + hoja.nombre);
+  return hoja.datos[fila - 1][i];
+};
 
 const llamar = (ctx, cuerpo) =>
   JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(cuerpo) } }).getContent());
@@ -660,7 +672,7 @@ probar('devuelve el catálogo completo, inactivos incluidos', () => {
 
   igual(r.productos.length, 3, 'el inactivo también tiene que venir');
   igual(r.productos[0], {
-    fila: 2, nombre: 'Almendras', categoria: 'Almacén', unidad: '1 kg',
+    fila: 2, codigo: '', nombre: 'Almendras', categoria: 'Almacén', unidad: '1 kg',
     activo: true, orden: null, stock: 12, costo: 1000, precio: 1800,
   });
   igual(r.productos[2].activo, false, 'Tofu está inactivo');
@@ -673,7 +685,7 @@ probar('crea las columnas comerciales si no están', () => {
   const token = login(ctx).token;
   const r = llamar(ctx, { accion: 'catalogo', token });
 
-  igual(hojas[0].datos[0].slice(4), ['Stock', 'Costo', 'Precio'],
+  igual(hojas[0].datos[0].slice(-3), ['Stock', 'Costo', 'Precio'],
     'debería haberlas agregado al final');
   igual(r.columnas.costo, true);
   igual(r.productos[0].costo, null, 'sin valor cargado viene en null');
@@ -688,7 +700,8 @@ probar('guarda stock, costo y precio', () => {
     campos: { stock: 20, costo: 1100, precio: '2200' },
   });
   afirmar(r.ok, r.error);
-  igual(hojas[0].datos[1].slice(4), [20, 1100, 2200]);
+  igual([valorDe(hojas[0], 2, 'Stock'), valorDe(hojas[0], 2, 'Costo'), valorDe(hojas[0], 2, 'Precio')],
+    [20, 1100, 2200]);
 });
 
 probar('guarda el nombre y lo deja como nueva referencia', () => {
@@ -698,7 +711,7 @@ probar('guarda el nombre y lo deja como nueva referencia', () => {
     accion: 'guardarProducto', token,
     fila: 2, nombreOriginal: 'Almendras', campos: { nombre: 'Almendras tostadas' },
   });
-  igual(hojas[0].datos[1][0], 'Almendras tostadas');
+  igual(valorDe(hojas[0], 2, 'NOMBRES'), 'Almendras tostadas');
 
   /* El segundo guardado tiene que ir con el nombre nuevo. */
   igual(llamar(ctx, {
@@ -731,7 +744,7 @@ probar('rechaza números inválidos y nombre vacío', () => {
   igual(llamar(ctx, { ...base, campos: { stock: -3 } }).codigo, 'DATOS_INVALIDOS', 'stock negativo');
   igual(llamar(ctx, { ...base, campos: { costo: 'gratis' } }).codigo, 'DATOS_INVALIDOS', 'texto');
   igual(llamar(ctx, { ...base, campos: { nombre: '   ' } }).codigo, 'DATOS_INVALIDOS', 'nombre vacío');
-  igual(hojas[0].datos[1][4], 12, 'nada de eso debería haber tocado la planilla');
+  igual(valorDe(hojas[0], 2, 'Stock'), 12, 'nada de eso debería haber tocado la planilla');
 });
 
 probar('vaciar una celda numérica la deja vacía, no en cero', () => {
@@ -741,7 +754,7 @@ probar('vaciar una celda numérica la deja vacía, no en cero', () => {
     accion: 'guardarProducto', token,
     fila: 2, nombreOriginal: 'Almendras', campos: { costo: '' },
   });
-  igual(hojas[0].datos[1][5], '', 'sin costo no es lo mismo que costo cero');
+  igual(valorDe(hojas[0], 2, 'Costo'), '', 'sin costo no es lo mismo que costo cero');
 });
 
 probar('activar y desactivar saca al producto del listado de pedidos', () => {
@@ -764,6 +777,101 @@ probar('sin sesión no se puede leer ni escribir el catálogo', () => {
     accion: 'guardarProducto', token: 'x'.repeat(64),
     fila: 2, nombreOriginal: 'Almendras', campos: { costo: 1 },
   }).codigo, 'SIN_AUTORIZACION');
+});
+
+probar('inserta la columna de código antes del nombre', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+
+  igual(hojas[0].datos[0].slice(0, 2), ['Código', 'NOMBRES'],
+    'el código va antes del nombre, no al final');
+  igual(hojas[0].datos[1].slice(0, 2), ['', 'Almendras'],
+    'los datos de la fila se corren con la columna');
+  igual([valorDe(hojas[0], 2, 'Stock'), valorDe(hojas[0], 2, 'Costo'), valorDe(hojas[0], 2, 'Precio')],
+    [12, 1000, 1800], 'stock, costo y precio siguen en su lugar');
+});
+
+probar('con código cargado, el id del producto sale del código', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  hojas[0].datos[1][0] = 'ALM-01';           // la columna Código quedó primera
+
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+  igual(productos[0].id, 'alm01', 'el id deriva del código');
+  igual(productos[0].codigo, 'ALM-01');
+  afirmar(productos[1].id.length > 0, 'sin código sigue derivando del nombre');
+});
+
+probar('renombrar no cambia el id si hay código', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  hojas[0].datos[1][0] = 'ALM-01';           // la columna Código quedó primera
+
+  const antes = llamar(ctx, { accion: 'productos', token }).productos[0].id;
+  llamar(ctx, {
+    accion: 'guardarProducto', token,
+    fila: 2, nombreOriginal: 'Almendras', campos: { nombre: 'Almendras peladas' },
+  });
+  igual(llamar(ctx, { accion: 'productos', token }).productos[0].id, antes,
+    'el id tiene que sobrevivir al cambio de nombre');
+});
+
+console.log('\nAlta de productos');
+
+probar('crea un producto al final del catálogo', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+
+  const r = llamar(ctx, {
+    accion: 'crearProducto', token,
+    campos: { codigo: 'MIE-01', nombre: 'Miel', categoria: 'Almacén', stock: 6, costo: 500, precio: 900 },
+  });
+  afirmar(r.ok, r.error);
+  igual(r.producto.fila, 5);
+  igual(hojas[0].datos[4], ['MIE-01', 'Miel', 'Almacén', '', 'SI', 6, 500, 900]);
+  igual(valorDe(hojas[0], 5, 'Precio'), 900);
+});
+
+probar('el producto nuevo nace activo y aparece en los pedidos', () => {
+  const { ctx } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  llamar(ctx, { accion: 'crearProducto', token, campos: { nombre: 'Miel' } });
+
+  const nombres = llamar(ctx, { accion: 'productos', token }).productos.map((p) => p.nombre);
+  afirmar(nombres.indexOf('Miel') >= 0, 'debería estar disponible para pedir: ' + nombres);
+});
+
+probar('sin nombre no se crea nada', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  const filasAntes = hojas[0].getLastRow();
+
+  igual(llamar(ctx, { accion: 'crearProducto', token, campos: { codigo: 'X-1', stock: 3 } }).codigo,
+    'DATOS_INVALIDOS');
+  igual(hojas[0].getLastRow(), filasAntes, 'no debería haber escrito la fila');
+});
+
+probar('rechaza un código repetido', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  hojas[0].datos[1][0] = 'ALM-01';           // la columna Código quedó primera
+
+  const r = llamar(ctx, { accion: 'crearProducto', token, campos: { codigo: 'alm-01', nombre: 'Otra cosa' } });
+  igual(r.codigo, 'DATOS_INVALIDOS');
+  afirmar(/ya hay un producto con el código/i.test(r.error), r.error);
+});
+
+probar('crear sin sesión válida se rechaza', () => {
+  const { ctx } = entornoCatalogo();
+  igual(llamar(ctx, { accion: 'crearProducto', token: '', campos: { nombre: 'Miel' } }).codigo,
+    'SIN_AUTORIZACION');
 });
 
 console.log('\nEtiquetas');

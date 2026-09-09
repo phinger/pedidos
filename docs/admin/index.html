@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#101114" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="../icons/icon-192.png">
-<link rel="stylesheet" href="admin.css?v=13">
+<link rel="stylesheet" href="admin.css?v=14">
 </head>
 <body>
 
@@ -57,9 +57,9 @@
     <table id="tabla">
       <thead>
         <tr>
+          <th class="col-codigo"  data-orden="codigo">Código</th>
           <th class="col-nombre"  data-orden="nombre">Producto</th>
           <th class="col-texto"   data-orden="categoria">Categoría</th>
-          <th class="col-texto"   data-orden="unidad">Unidad</th>
           <th class="col-num"     data-orden="stock">Stock</th>
           <th class="col-num"     data-orden="costo">Costo</th>
           <th class="col-num"     data-orden="precio">Venta</th>
@@ -69,6 +69,7 @@
         </tr>
       </thead>
       <tbody id="cuerpo"></tbody>
+      <tfoot id="pie-alta"></tfoot>
     </table>
     <p class="sin-resultados" id="sin-resultados" hidden>Ningún producto coincide con la búsqueda.</p>
   </main>
@@ -77,13 +78,14 @@
     <p>
       El margen se calcula sobre la venta: <code>venta = costo ÷ (1 − margen)</code>.
       Los cambios se guardan solos al salir de cada celda.
+      Para agregar un producto, escribí en la fila vacía de abajo.
     </p>
   </footer>
 </div>
 
 <div class="aviso" id="aviso" hidden role="status"></div>
 
-<script src="../config.js?v=13"></script>
-<script src="admin.js?v=13"></script>
+<script src="../config.js?v=14"></script>
+<script src="admin.js?v=14"></script>
 </body>
 </html>

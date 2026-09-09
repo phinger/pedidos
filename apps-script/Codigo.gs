@@ -17,7 +17,7 @@
 /* Se sube a mano con cada cambio que haya que publicar. doGet lo devuelve, así
    que abriendo la URL /exec en el navegador se ve qué versión está realmente
    publicada — que no es lo mismo que la que muestra el editor. */
-const VERSION_API = 4;
+const VERSION_API = 5;
 
 const CFG = {
   /* ── Solapas ──────────────────────────────────────────────────────── */
@@ -32,6 +32,7 @@ const CFG = {
      prueba por "contiene". Para adaptarlo a la planilla real alcanza con
      agregar el nombre verdadero al principio de la lista.                */
   COLS_PRODUCTOS: {
+    codigo:    ['codigo', 'cod', 'sku', 'articulo'],
     nombre:    ['nombres', 'producto', 'nombre', 'descripcion'],   // requerida
     categoria: ['categoria', 'rubro', 'familia', 'grupo'],
     unidad:    ['unidad', 'presentacion', 'medida', 'envase'],
@@ -45,6 +46,9 @@ const CFG = {
   /* Columnas del catálogo que la página de administración necesita y que se
      crean solas si no están. */
   COLS_A_CREAR: ['Stock', 'Costo', 'Precio'],
+
+  /* El código va antes que el nombre, no al final. */
+  COL_CODIGO_TITULO: 'Código',
   COLS_PEDIDOS: {
     id:      ['id', 'idpedido', 'pedido', 'numero'],               // requerida
     fecha:   ['fecha'],                                            // requerida
@@ -106,6 +110,7 @@ function doPost(e) {
     if (accion === 'deshacer')   return _salida(_deshacerUltimoLote());
     if (accion === 'catalogo')   return _salida(accionCatalogo());
     if (accion === 'guardarProducto') return _salida(accionGuardarProducto(cuerpo, sesion));
+    if (accion === 'crearProducto')   return _salida(accionCrearProducto(cuerpo, sesion));
     if (accion === 'estructura') return _salida(accionEstructura());
 
     /* Casi siempre significa que el código está guardado pero no publicado:
@@ -356,9 +361,13 @@ function _esVerdadero(valor) {
   return ['si', 'sí', 'true', 'verdadero', 'x', '1', 'ok', 'activo'].indexOf(t) >= 0;
 }
 
-/** Identificador estable por nombre: sobrevive a que se reordenen las filas. */
-function _idProducto(nombre, usados) {
-  let base = _normalizar(nombre).slice(0, 40) || 'producto';
+/**
+ * Identificador estable del producto. Usa el código si está cargado —así
+ * renombrar no rompe nada— y si no, deriva del nombre. En cualquier caso
+ * sobrevive a que se reordenen las filas.
+ */
+function _idProducto(nombre, usados, codigo) {
+  let base = _normalizar(codigo) || _normalizar(nombre).slice(0, 40) || 'producto';
   let id = base;
   let n = 2;
   while (usados[id]) { id = base + '_' + n; n++; }
@@ -398,7 +407,8 @@ function accionProductos() {
     if (filtrarPorActivo && !_esVerdadero(fila[col.activo])) continue;
 
     productos.push({
-      id: _idProducto(nombre, usados),
+      id: _idProducto(nombre, usados, col.codigo >= 0 ? fila[col.codigo] : ''),
+      codigo: col.codigo >= 0 ? String(fila[col.codigo] || '').trim() : '',
       nombre: nombre,
       categoria: col.categoria >= 0 ? String(fila[col.categoria] || '').trim() : '',
       unidad: col.unidad >= 0 ? String(fila[col.unidad] || '').trim() : '',
@@ -547,10 +557,26 @@ function _copiarStatus(hoja, encabezados, filaNueva) {
    Administración del catálogo
    ═══════════════════════════════════════════════════════════════════════ */
 
-/** Crea al final las columnas de COLS_A_CREAR que falten. Idempotente. */
+/**
+ * Deja el catálogo con las columnas que necesita la administración.
+ * Idempotente: lo que ya está no se toca.
+ *
+ * El código se inserta antes del nombre; el resto se agrega al final.
+ */
 function _asegurarColumnasProductos(hoja) {
   let ancho = Math.max(1, hoja.getLastColumn());
   let encabezados = hoja.getRange(1, 1, 1, ancho).getValues()[0].map(_normalizar);
+
+  if (_buscarColumna(encabezados, CFG.COLS_PRODUCTOS.codigo) < 0) {
+    const posNombre = _buscarColumna(encabezados, CFG.COLS_PRODUCTOS.nombre);
+    if (posNombre >= 0) {
+      hoja.insertColumnBefore(posNombre + 1);
+      hoja.getRange(1, posNombre + 1).setValue(CFG.COL_CODIGO_TITULO).setFontWeight('bold');
+      hoja.setColumnWidth(posNombre + 1, 110);
+      ancho++;
+      encabezados = hoja.getRange(1, 1, 1, ancho).getValues()[0].map(_normalizar);
+    }
+  }
 
   CFG.COLS_A_CREAR.forEach(function (titulo) {
     const campo = _normalizar(titulo);
@@ -593,6 +619,7 @@ function accionCatalogo() {
 
     productos.push({
       fila: i + 1,
+      codigo: col.codigo >= 0 ? String(fila[col.codigo] || '').trim() : '',
       nombre: nombre,
       categoria: col.categoria >= 0 ? String(fila[col.categoria] || '').trim() : '',
       unidad: col.unidad >= 0 ? String(fila[col.unidad] || '').trim() : '',
@@ -650,7 +677,7 @@ function accionGuardarProducto(p, sesion) {
       escrito.nombre = nombre;
     }
 
-    ['categoria', 'unidad'].forEach(function (campo) {
+    ['codigo', 'categoria', 'unidad'].forEach(function (campo) {
       if (campos[campo] === undefined || col[campo] < 0) return;
       hoja.getRange(fila, col[campo] + 1).setValue(String(campos[campo]).trim());
       escrito[campo] = String(campos[campo]).trim();
@@ -683,6 +710,85 @@ function accionGuardarProducto(p, sesion) {
     SpreadsheetApp.flush();
 
     return { ok: true, fila: fila, campos: escrito };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+/** Agrega un producto al final del catálogo. Solo el nombre es obligatorio. */
+function accionCrearProducto(p, sesion) {
+  const campos = p.campos || {};
+  const nombre = String(campos.nombre || '').trim();
+  if (!nombre) throw _error('El producto necesita un nombre.', 'DATOS_INVALIDOS');
+  if (nombre.length > 200) throw _error('El nombre es demasiado largo.', 'DATOS_INVALIDOS');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) throw _error('El servidor está ocupado. Probá de nuevo.', 'OCUPADO');
+
+  try {
+    const hoja = _hoja(CFG.HOJA_PRODUCTOS);
+    _asegurarColumnasProductos(hoja);
+
+    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map(_normalizar);
+    const col = _mapearColumnas(encabezados, CFG.COLS_PRODUCTOS);
+
+    const codigo = String(campos.codigo || '').trim();
+    if (codigo && col.codigo >= 0) {
+      /* Un código repetido rompería la identificación de los productos en los
+         pedidos, así que se rechaza antes de escribir. */
+      const existentes = hoja.getLastRow() > 1
+        ? hoja.getRange(2, col.codigo + 1, hoja.getLastRow() - 1, 1).getValues()
+        : [];
+      for (let i = 0; i < existentes.length; i++) {
+        if (_normalizar(existentes[i][0]) === _normalizar(codigo)) {
+          throw _error('Ya hay un producto con el código ' + codigo + '.', 'DATOS_INVALIDOS');
+        }
+      }
+    }
+
+    const fila = hoja.getLastRow() + 1;
+    hoja.getRange(fila, col.nombre + 1).setValue(nombre);
+    if (codigo && col.codigo >= 0) hoja.getRange(fila, col.codigo + 1).setValue(codigo);
+
+    ['categoria', 'unidad'].forEach(function (campo) {
+      if (col[campo] < 0 || campos[campo] === undefined) return;
+      hoja.getRange(fila, col[campo] + 1).setValue(String(campos[campo]).trim());
+    });
+
+    ['stock', 'costo', 'precio'].forEach(function (campo) {
+      if (col[campo] < 0 || campos[campo] === undefined || campos[campo] === '') return;
+      const n = _numero(campos[campo]);
+      if (n === null || n < 0) {
+        throw _error('El valor de ' + campo + ' tiene que ser un número no negativo.', 'DATOS_INVALIDOS');
+      }
+      hoja.getRange(fila, col[campo] + 1).setValue(n);
+    });
+
+    /* Nace activo salvo que se diga lo contrario: si no, un producto recién
+       cargado no aparecería en los pedidos y no se entendería por qué. */
+    if (col.activo >= 0) {
+      hoja.getRange(fila, col.activo + 1).setValue(campos.activo === false ? 'NO' : 'SI');
+    }
+
+    CacheService.getScriptCache().remove('catalogo');
+    SpreadsheetApp.flush();
+
+    return {
+      ok: true,
+      producto: {
+        fila: fila,
+        codigo: codigo,
+        nombre: nombre,
+        categoria: String(campos.categoria || '').trim(),
+        unidad: String(campos.unidad || '').trim(),
+        activo: campos.activo !== false,
+        orden: null,
+        stock: _numero(campos.stock),
+        costo: _numero(campos.costo),
+        precio: _numero(campos.precio),
+      },
+    };
   } finally {
     lock.releaseLock();
   }

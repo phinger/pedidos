@@ -160,6 +160,15 @@ computadora. También se llega desde la app: **⋮ → Stock y precios**.
 Es una tabla editable: se cambia el valor en la celda y se guarda solo al
 salir. Cada fila muestra un tilde cuando terminó de guardar.
 
+**Para agregar un producto** se escribe en la fila vacía del pie de la tabla.
+Con solo poner el nombre alcanza; el resto se puede completar después. El
+producto nace activo, así que aparece enseguida en la app de pedidos.
+
+**El código** es opcional, y cuando está cargado pasa a ser el identificador
+del producto: con código, renombrar un producto no rompe los pedidos a medio
+cargar en los teléfonos. Sin código, el identificador se deriva del nombre.
+Dos productos no pueden compartir código.
+
 ### El margen
 
 Se calcula sobre la venta, con la fórmula acordada:
