@@ -1213,6 +1213,96 @@ probar('rechaza operar sobre una fila cuyo ID no coincide', () => {
     'CONFLICTO');
 });
 
+console.log('\nPedidos: operaciones en lote');
+
+/* Tres pedidos cargados, para operar de a varios. */
+function conVariosPedidos() {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+
+  ['Gimena', 'Marcelo', 'Ana'].forEach((nombre, i) => {
+    llamar(ctx, {
+      accion: 'pedido', token, nombre, clave: 'k' + i,
+      items: [{ id: productos[0].id, cantidad: 2 }],
+    });
+  });
+  return { ctx, hojas, token };
+}
+
+const lote = (ctx, token, operacion, filas) => llamar(ctx, {
+  accion: 'estadoPedidos', token, operacion,
+  items: filas.map((f) => ({ fila: f, id: 'P-000' + (f - 1) })),
+});
+
+probar('entrega varios pedidos de una sola llamada', () => {
+  const { ctx, hojas, token } = conVariosPedidos();
+  const r = lote(ctx, token, 'entregar', [2, 3, 4]);
+
+  igual(r.hechos, 3);
+  igual(r.resultados.map((x) => x.status), ['Entregado', 'Entregado', 'Entregado']);
+  igual(stockDe(hojas, 'Almendras'), 6, '12 - 2 - 2 - 2');
+});
+
+probar('que uno falle no cancela los demás', () => {
+  const { ctx, hojas, token } = conVariosPedidos();
+  lote(ctx, token, 'entregar', [3]);            // este ya queda entregado
+  const r = lote(ctx, token, 'entregar', [2, 3, 4]);
+
+  igual(r.hechos, 2, 'los otros dos deberían entregarse igual');
+  const fallado = r.resultados.find((x) => !x.ok);
+  igual(fallado.id, 'P-0002');
+  afirmar(/Ya está entregado/.test(fallado.error), fallado.error);
+  igual(stockDe(hojas, 'Almendras'), 6, 'el stock se descontó una sola vez por pedido');
+});
+
+probar('deshacer en lote repone todo el stock', () => {
+  const { ctx, hojas, token } = conVariosPedidos();
+  lote(ctx, token, 'entregar', [2, 3, 4]);
+  igual(stockDe(hojas, 'Almendras'), 6);
+
+  const r = lote(ctx, token, 'deshacer', [2, 3, 4]);
+  igual(r.hechos, 3);
+  igual(stockDe(hojas, 'Almendras'), 12);
+  igual(valorDe(hojas[1], 2, 'Status'), 'Pendiente');
+});
+
+probar('cancelar en lote no toca el stock', () => {
+  const { ctx, hojas, token } = conVariosPedidos();
+  const r = lote(ctx, token, 'cancelar', [2, 3]);
+  igual(r.hechos, 2);
+  igual(stockDe(hojas, 'Almendras'), 12);
+  igual(llamar(ctx, { accion: 'etiquetas', token }).cantidad, 1, 'solo queda uno pendiente');
+});
+
+probar('informa el faltante de stock del lote entero', () => {
+  const { ctx, hojas, token } = conVariosPedidos();
+  hojas[0].datos[1][5] = 3;                    // hay 3 y los tres pedidos piden 2
+
+  const r = lote(ctx, token, 'entregar', [2, 3, 4]);
+  igual(r.hechos, 3, 'ninguna entrega se frena');
+  igual(stockDe(hojas, 'Almendras'), 0);
+  igual(r.recortados.length, 2, 'dos pedidos no tuvieron stock suficiente');
+});
+
+probar('un lote vacío o demasiado grande se rechaza', () => {
+  const { ctx, token } = conVariosPedidos();
+  igual(llamar(ctx, { accion: 'estadoPedidos', token, operacion: 'entregar', items: [] }).codigo,
+    'DATOS_INVALIDOS');
+
+  const enorme = Array.from({ length: 200 }, () => ({ fila: 2, id: 'P-0001' }));
+  igual(llamar(ctx, { accion: 'estadoPedidos', token, operacion: 'entregar', items: enorme }).codigo,
+    'DATOS_INVALIDOS');
+});
+
+probar('sin sesión no se opera en lote', () => {
+  const { ctx } = conVariosPedidos();
+  igual(llamar(ctx, {
+    accion: 'estadoPedidos', token: '', operacion: 'entregar', items: [{ fila: 2, id: 'P-0001' }],
+  }).codigo, 'SIN_AUTORIZACION');
+});
+
 console.log('\nPedidos: edición del detalle');
 
 probar('editar recalcula el detalle y el total', () => {

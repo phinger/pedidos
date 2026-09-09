@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#101114" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="../icons/icon-192.png">
-<link rel="stylesheet" href="admin.css?v=19">
+<link rel="stylesheet" href="admin.css?v=20">
 </head>
 <body>
 
@@ -89,6 +89,18 @@
   </main>
 
   <main class="marco-tabla" id="vista-pedidos" hidden>
+    <div class="barra-seleccion" id="barra-seleccion">
+      <label class="interruptor">
+        <input type="checkbox" id="seleccionar-todo">
+        <span id="texto-seleccion">Seleccionar todo</span>
+      </label>
+      <div class="acciones-lote" id="acciones-lote" hidden>
+        <button class="btn btn-primario" id="lote-entregar">Entregar</button>
+        <button class="btn" id="lote-cancelar">Cancelar</button>
+        <button class="btn" id="lote-deshacer">Deshacer</button>
+        <button class="btn btn-fantasma" id="lote-limpiar">Quitar selección</button>
+      </div>
+    </div>
     <div class="lista-pedidos" id="lista-pedidos"></div>
     <p class="sin-resultados" id="sin-pedidos" hidden>Ningún pedido coincide con el filtro.</p>
   </main>
@@ -124,7 +136,7 @@
 
 <div class="aviso" id="aviso" hidden role="status"></div>
 
-<script src="../config.js?v=19"></script>
-<script src="admin.js?v=19"></script>
+<script src="../config.js?v=20"></script>
+<script src="admin.js?v=20"></script>
 </body>
 </html>

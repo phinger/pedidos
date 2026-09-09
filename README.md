@@ -176,6 +176,20 @@ nombre o producto. Sobre cada pedido:
 El recorrido de un pedido es `Pendiente` → `Impreso` (al generar etiquetas) →
 `Entregado`. Se puede entregar directo desde cualquiera de los dos primeros.
 
+### Selección múltiple
+
+Cada pedido tiene su casilla y la barra de arriba selecciona todos los que
+estén a la vista. Con algo seleccionado aparecen las acciones en lote, y cada
+botón dice sobre cuántos va a actuar de verdad: si hay diez tildados pero solo
+tres se pueden entregar, el botón dice *Entregar (3)*.
+
+Cambiar de filtro o buscar **limpia la selección**. Operar sobre pedidos que ya
+no están a la vista es la forma más fácil de tocar el equivocado.
+
+El lote viaja en una sola llamada y corre bajo un único lock del servidor: que
+uno falle no cancela los demás, y el resultado informa cuántos cambiaron y por
+qué fallaron los otros. El máximo es de 150 pedidos por vez.
+
 **El stock nunca queda negativo.** Si al entregar no alcanza, se descuenta
 hasta cero y la pantalla avisa de qué producto faltaba: quien apretó *Entregar*
 ya despachó la mercadería, así que frenar la operación por un descuadre de

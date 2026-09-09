@@ -315,11 +315,26 @@ tfoot input:focus {
 
 /* ── Lista de pedidos ────────────────────────────────────────────────── */
 
-.lista-pedidos { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+/* La barra queda pegada arriba: con la lista larga, la selección y sus
+   acciones tienen que seguir a mano sin volver al principio. */
+.barra-seleccion {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  padding: 10px 2px;
+  background: var(--fondo);
+  border-bottom: 1px solid var(--borde);
+}
+.barra-seleccion .interruptor { color: var(--texto); }
+
+.acciones-lote { display: flex; gap: 6px; flex-wrap: wrap; }
+.acciones-lote .btn { height: 34px; padding: 0 12px; font-size: 14px; }
+
+.lista-pedidos { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; }
 
 .pedido {
   display: grid;
-  grid-template-columns: 100px 130px 1fr auto;
+  grid-template-columns: auto 100px 130px 1fr auto;
   gap: 16px;
   align-items: start;
   padding: 14px 16px;
@@ -327,6 +342,10 @@ tfoot input:focus {
   border: 1px solid var(--borde);
   border-radius: 11px;
 }
+.pedido[data-seleccionado="true"] { border-color: var(--acento); }
+.pedido-marca { display: flex; align-items: center; height: 22px; }
+.pedido-marca input { width: 17px; height: 17px; accent-color: var(--acento); cursor: pointer; }
+
 .pedido[data-status="Entregado"] { opacity: .62; }
 .pedido[data-status="Cancelado"] { opacity: .5; }
 
@@ -443,7 +462,8 @@ tfoot input:focus {
 .aviso[data-tipo="error"] { background: var(--peligro); color: #fff; }
 
 @media (max-width: 860px) {
-  .pedido { grid-template-columns: 1fr; gap: 8px; }
+  .pedido { grid-template-columns: auto 1fr; gap: 8px 12px; }
+  .pedido-cuando, .pedido-derecha { grid-column: 2; }
   .pedido-derecha { justify-content: space-between; }
   .cabecera, .marco-tabla, .pie { padding-left: 14px; padding-right: 14px; }
   .buscador input { width: 190px; }

@@ -36,6 +36,7 @@ const estado = {
   pedidos: [],
   estados: { inicial: 'Pendiente', impreso: 'Impreso', entregado: 'Entregado', cancelado: 'Cancelado' },
   filtroEstado: '__todos__',
+  seleccion: new Set(),      // ids de pedidos tildados
   editando: null,
 };
 
@@ -174,6 +175,7 @@ function mostrarVista(vista) {
      puesto haría parecer que faltan cosas. */
   estado.busqueda = '';
   $('#buscar').value = '';
+  estado.seleccion.clear();
   render();
 }
 
@@ -397,6 +399,7 @@ function renderPedidos() {
   cont.appendChild(frag);
 
   $('#sin-pedidos').hidden = lista.length > 0;
+  renderSeleccion();
   renderResumenPedidos();
 }
 
@@ -417,9 +420,6 @@ function renderChipsEstado() {
   cont.innerHTML = '';
   opciones.forEach(([valor, etiqueta]) => {
     const n = cuenta(valor);
-    /* Un estado sin pedidos no ocupa lugar, salvo que sea el filtro puesto. */
-    if (!n && valor !== TODOS && valor !== estado.filtroEstado) return;
-
     const chip = document.createElement('button');
     chip.className = 'chip';
     chip.type = 'button';
@@ -429,7 +429,13 @@ function renderChipsEstado() {
     cuentaEl.className = 'cuenta';
     cuentaEl.textContent = n;
     chip.appendChild(cuentaEl);
-    chip.onclick = () => { estado.filtroEstado = valor; render(); };
+    chip.onclick = () => {
+      estado.filtroEstado = valor;
+      /* Cambiar el filtro limpia la selección: operar sobre pedidos que ya no
+         se ven es la forma más fácil de tocar el pedido equivocado. */
+      estado.seleccion.clear();
+      render();
+    };
     cont.appendChild(chip);
   });
 }
@@ -439,6 +445,43 @@ function renderContadorPedidos() {
   const contador = $('#contador-pedidos');
   contador.hidden = pendientes === 0;
   contador.textContent = pendientes;
+}
+
+/* Los pedidos tildados que además están a la vista: sobre esos se opera. */
+function seleccionados() {
+  return pedidosVisibles().filter((p) => estado.seleccion.has(p.id));
+}
+
+function renderSeleccion() {
+  const visibles = pedidosVisibles();
+  const elegidos = seleccionados();
+  const todo = $('#seleccionar-todo');
+
+  todo.checked = visibles.length > 0 && elegidos.length === visibles.length;
+  todo.indeterminate = elegidos.length > 0 && elegidos.length < visibles.length;
+  todo.disabled = visibles.length === 0;
+
+  $('#texto-seleccion').textContent = elegidos.length
+    ? elegidos.length + ' de ' + visibles.length + ' seleccionados'
+    : 'Seleccionar todo';
+
+  $('#acciones-lote').hidden = elegidos.length === 0;
+
+  /* Cada botón dice sobre cuántos va a actuar de verdad: si hay diez
+     seleccionados pero solo tres se pueden entregar, mejor saberlo antes. */
+  const entregables = elegidos.filter(
+    (p) => p.status !== estado.estados.entregado && p.status !== estado.estados.cancelado);
+  const reversibles = elegidos.filter(
+    (p) => p.status === estado.estados.entregado || p.status === estado.estados.cancelado);
+
+  const marcar = (sel, etiqueta, lista) => {
+    const b = $(sel);
+    b.textContent = lista.length ? etiqueta + ' (' + lista.length + ')' : etiqueta;
+    b.disabled = lista.length === 0;
+  };
+  marcar('#lote-entregar', 'Entregar', entregables);
+  marcar('#lote-cancelar', 'Cancelar', entregables);
+  marcar('#lote-deshacer', 'Deshacer', reversibles);
 }
 
 function renderResumenPedidos() {
@@ -463,6 +506,21 @@ function crearTarjetaPedido(p) {
   const tarjeta = document.createElement('article');
   tarjeta.className = 'pedido';
   tarjeta.dataset.status = p.status;
+  tarjeta.dataset.seleccionado = String(estado.seleccion.has(p.id));
+
+  const marcaSel = document.createElement('div');
+  marcaSel.className = 'pedido-marca';
+  const tilde = document.createElement('input');
+  tilde.type = 'checkbox';
+  tilde.checked = estado.seleccion.has(p.id);
+  tilde.setAttribute('aria-label', 'seleccionar ' + p.id);
+  tilde.onchange = () => {
+    if (tilde.checked) estado.seleccion.add(p.id);
+    else estado.seleccion.delete(p.id);
+    tarjeta.dataset.seleccionado = String(tilde.checked);
+    renderSeleccion();
+  };
+  marcaSel.appendChild(tilde);
 
   const id = document.createElement('div');
   id.className = 'pedido-id';
@@ -523,7 +581,7 @@ function crearTarjetaPedido(p) {
   }
 
   derecha.appendChild(acciones);
-  tarjeta.append(id, cuando, centro, derecha);
+  tarjeta.append(marcaSel, id, cuando, centro, derecha);
   return tarjeta;
 }
 
@@ -557,6 +615,58 @@ async function operar(pedido, operacion, boton) {
     aviso(e.message, 'error');
     boton.disabled = false;
     boton.textContent = previo;
+  }
+}
+
+async function operarLote(operacion) {
+  const elegidos = seleccionados().filter((p) => {
+    const terminado = p.status === estado.estados.entregado || p.status === estado.estados.cancelado;
+    return operacion === 'deshacer' ? terminado : !terminado;
+  });
+  if (!elegidos.length) return;
+
+  const verbo = { entregar: 'Entregar', cancelar: 'Cancelar', deshacer: 'Deshacer' }[operacion];
+  if (!confirm(verbo + ' ' + elegidos.length +
+      (elegidos.length === 1 ? ' pedido?' : ' pedidos?'))) return;
+
+  const barra = $('#acciones-lote');
+  barra.hidden = true;
+  aviso(verbo + ' ' + elegidos.length + ' pedidos…');
+
+  try {
+    const r = await api('estadoPedidos', {
+      operacion,
+      items: elegidos.map((p) => ({ fila: p.fila, id: p.id })),
+    });
+
+    /* El servidor informa pedido por pedido: uno que falle no cancela el resto,
+       y hay que reflejar exactamente cuáles cambiaron. */
+    const porId = new Map(r.resultados.map((x) => [x.id, x]));
+    estado.pedidos.forEach((p) => {
+      const res = porId.get(p.id);
+      if (res && res.ok) p.status = res.status;
+    });
+
+    const fallados = r.resultados.filter((x) => !x.ok);
+    let texto = r.hechos + (r.hechos === 1 ? ' pedido' : ' pedidos') + ' ' +
+      { entregar: 'entregados', cancelar: 'cancelados', deshacer: 'revertidos' }[operacion];
+    if (fallados.length) texto += ' · ' + fallados.length + ' sin cambios: ' + fallados[0].error;
+    if (r.recortados && r.recortados.length) {
+      texto += ' · faltaba stock de ' +
+        [...new Set(r.recortados.map((x) => x.nombre))].join(', ');
+    }
+    if (r.faltantes && r.faltantes.length) {
+      texto += ' · no encontré en el catálogo: ' + r.faltantes.join(', ');
+    }
+    aviso(texto, fallados.length || (r.recortados || []).length ? 'error' : '');
+
+    estado.seleccion.clear();
+    if (operacion !== 'cancelar') await recargarCatalogo();
+    render();
+  } catch (e) {
+    if (e.codigo === 'SIN_AUTORIZACION') return;
+    aviso(e.message, 'error');
+    renderSeleccion();
   }
 }
 
@@ -792,6 +902,7 @@ async function guardar(producto, tr, campos, origen) {
 function conectarEventos() {
   $('#buscar').addEventListener('input', (e) => {
     estado.busqueda = e.target.value;
+    if (estado.vista === 'pedidos') estado.seleccion.clear();
     render();
   });
 
@@ -802,6 +913,18 @@ function conectarEventos() {
 
   $('#solapa-productos').addEventListener('click', () => mostrarVista('productos'));
   $('#solapa-pedidos').addEventListener('click', () => mostrarVista('pedidos'));
+
+  $('#seleccionar-todo').addEventListener('change', (e) => {
+    const visibles = pedidosVisibles();
+    if (e.target.checked) visibles.forEach((p) => estado.seleccion.add(p.id));
+    else visibles.forEach((p) => estado.seleccion.delete(p.id));
+    render();
+  });
+
+  $('#lote-entregar').addEventListener('click', () => operarLote('entregar'));
+  $('#lote-cancelar').addEventListener('click', () => operarLote('cancelar'));
+  $('#lote-deshacer').addEventListener('click', () => operarLote('deshacer'));
+  $('#lote-limpiar').addEventListener('click', () => { estado.seleccion.clear(); render(); });
 
   $('#btn-cancelar-edicion').addEventListener('click', cerrarEdicion);
   $('#btn-guardar-edicion').addEventListener('click', guardarEdicion);

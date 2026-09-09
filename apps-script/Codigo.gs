@@ -17,7 +17,7 @@
 /* Se sube a mano con cada cambio que haya que publicar. doGet lo devuelve, así
    que abriendo la URL /exec en el navegador se ve qué versión está realmente
    publicada — que no es lo mismo que la que muestra el editor. */
-const VERSION_API = 7;
+const VERSION_API = 8;
 
 const CFG = {
   /* ── Solapas ──────────────────────────────────────────────────────── */
@@ -81,6 +81,7 @@ const CFG = {
   DIGITOS_ID:   4,
   SESION_DIAS:  180,
   MAX_ITEMS:    300,
+  MAX_LOTE:     150,          // pedidos por operación en lote
   MAX_CANTIDAD: 999,
   HORA_FORMATO: 'HH:mm',
   SEPARADOR:    '; ',                // entre productos dentro de "Detalle"
@@ -115,6 +116,7 @@ function doPost(e) {
     if (accion === 'crearProducto')   return _salida(accionCrearProducto(cuerpo, sesion));
     if (accion === 'pedidos')         return _salida(accionPedidos());
     if (accion === 'estadoPedido')    return _salida(accionEstadoPedido(cuerpo, sesion));
+    if (accion === 'estadoPedidos')   return _salida(accionEstadoPedidos(cuerpo, sesion));
     if (accion === 'editarPedido')    return _salida(accionEditarPedido(cuerpo, sesion));
     if (accion === 'estructura') return _salida(accionEstructura());
 
@@ -957,67 +959,132 @@ function _aplicarStock(items, signo) {
  * que se descontó y no hace falta una columna más en la planilla.
  */
 function accionEstadoPedido(p, sesion) {
-  /* Se llama "operacion" y no "accion" porque ese nombre ya lo usa el router
-     del doPost: dos campos con el mismo nombre en el mismo objeto JSON hacen
-     que uno pise al otro. */
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) throw _error('El servidor está ocupado. Probá de nuevo.', 'OCUPADO');
+  try {
+    const ctx = _mapaPedidos();
+    if (ctx.colStatus < 0) throw _error('No encontré la columna de status.', 'SIN_CONFIG');
+    const r = _operarPedido(ctx, Math.floor(Number(p.fila)), p.id, String(p.operacion || ''));
+    _trasOperarPedidos();
+    return r;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Igual que la anterior pero para muchos pedidos de una sola vez.
+ *
+ * Un lote de treinta pedidos por llamadas sueltas serían treinta viajes al
+ * servidor, cada uno esperando el lock del anterior. Acá se toma el lock una
+ * vez y se informa el resultado de cada pedido por separado: que uno falle no
+ * cancela los demás.
+ */
+function accionEstadoPedidos(p, sesion) {
+  const items = Array.isArray(p.items) ? p.items : [];
   const operacion = String(p.operacion || '');
+  if (!items.length) throw _error('No hay pedidos seleccionados.', 'DATOS_INVALIDOS');
+  if (items.length > CFG.MAX_LOTE) {
+    throw _error('Son demasiados pedidos de una vez (máximo ' + CFG.MAX_LOTE + ').', 'DATOS_INVALIDOS');
+  }
+
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(25000)) throw _error('El servidor está ocupado. Probá de nuevo.', 'OCUPADO');
 
   try {
-    const { hoja, col, colStatus } = _mapaPedidos();
-    if (colStatus < 0) throw _error('No encontré la columna de status.', 'SIN_CONFIG');
+    const ctx = _mapaPedidos();
+    if (ctx.colStatus < 0) throw _error('No encontré la columna de status.', 'SIN_CONFIG');
 
-    const fila = _filaDePedido(hoja, col, Math.floor(Number(p.fila)), p.id);
-    const status = String(hoja.getRange(fila, colStatus + 1).getValue() || '').trim();
-    const props = PropertiesService.getScriptProperties();
-    const clave = 'pedido_' + String(p.id).trim();
-    const items = _parsearDetalle(hoja.getRange(fila, col.detalle + 1).getValue());
+    const resultados = [];
+    const recortados = [];
+    const faltantes = [];
 
-    if (operacion === 'entregar') {
-      if (status === CFG.STATUS_ENTREGADO) throw _error('Ese pedido ya está entregado.', 'CONFLICTO');
-      if (status === CFG.STATUS_CANCELADO) throw _error('Ese pedido está cancelado.', 'CONFLICTO');
-
-      const r = _aplicarStock(items, -1);
-      hoja.getRange(fila, colStatus + 1).setValue(CFG.STATUS_ENTREGADO);
-      props.setProperty(clave, JSON.stringify({ anterior: status, stock: r.aplicado }));
-      CacheService.getScriptCache().remove('catalogo');
-      SpreadsheetApp.flush();
-      return { ok: true, status: CFG.STATUS_ENTREGADO,
-               faltantes: r.faltantes, recortados: r.recortados };
-    }
-
-    if (operacion === 'cancelar') {
-      if (status === CFG.STATUS_ENTREGADO) {
-        throw _error('Está entregado. Deshacé la entrega antes de cancelarlo.', 'CONFLICTO');
+    items.forEach(function (item) {
+      try {
+        const r = _operarPedido(ctx, Math.floor(Number(item.fila)), item.id, operacion);
+        resultados.push({ id: item.id, ok: true, status: r.status });
+        (r.recortados || []).forEach(function (x) { recortados.push(x); });
+        (r.faltantes || []).forEach(function (x) {
+          if (faltantes.indexOf(x) < 0) faltantes.push(x);
+        });
+      } catch (e) {
+        resultados.push({ id: item.id, ok: false, error: e.message });
       }
-      if (status === CFG.STATUS_CANCELADO) throw _error('Ese pedido ya está cancelado.', 'CONFLICTO');
+    });
 
-      hoja.getRange(fila, colStatus + 1).setValue(CFG.STATUS_CANCELADO);
-      props.setProperty(clave, JSON.stringify({ anterior: status, stock: [] }));
-      SpreadsheetApp.flush();
-      return { ok: true, status: CFG.STATUS_CANCELADO };
-    }
-
-    if (operacion === 'deshacer') {
-      const crudo = props.getProperty(clave);
-      if (!crudo) throw _error('No hay nada que deshacer en ese pedido.', 'CONFLICTO');
-
-      const previo = JSON.parse(crudo);
-      if (previo.stock && previo.stock.length) _aplicarStock(previo.stock, +1);
-
-      hoja.getRange(fila, colStatus + 1).setValue(previo.anterior || CFG.STATUS_INICIAL);
-      props.deleteProperty(clave);
-      CacheService.getScriptCache().remove('catalogo');
-      SpreadsheetApp.flush();
-      return { ok: true, status: previo.anterior || CFG.STATUS_INICIAL,
-               repuesto: (previo.stock || []).length };
-    }
-
-    throw _error('Operación de pedido desconocida: ' + operacion, 'ACCION_INVALIDA');
+    _trasOperarPedidos();
+    return {
+      ok: true,
+      resultados: resultados,
+      hechos: resultados.filter(function (r) { return r.ok; }).length,
+      recortados: recortados,
+      faltantes: faltantes,
+    };
   } finally {
     lock.releaseLock();
   }
+}
+
+function _trasOperarPedidos() {
+  CacheService.getScriptCache().remove('catalogo');
+  SpreadsheetApp.flush();
+}
+
+/**
+ * Entrega, cancela o deshace un pedido. El estado anterior y el movimiento de
+ * stock se guardan en las propiedades del script, así deshacer repone
+ * exactamente lo que se descontó y no hace falta una columna más.
+ *
+ * No toma el lock: eso es responsabilidad de quien la llama, para que un lote
+ * entero corra bajo un único lock.
+ */
+function _operarPedido(ctx, fila, id, operacion) {
+  const hoja = ctx.hoja;
+  const col = ctx.col;
+  const colStatus = ctx.colStatus;
+
+  _filaDePedido(hoja, col, fila, id);
+  const status = String(hoja.getRange(fila, colStatus + 1).getValue() || '').trim();
+  const props = PropertiesService.getScriptProperties();
+  const clave = 'pedido_' + String(id).trim();
+  const items = _parsearDetalle(hoja.getRange(fila, col.detalle + 1).getValue());
+
+  if (operacion === 'entregar') {
+    if (status === CFG.STATUS_ENTREGADO) throw _error('Ya está entregado.', 'CONFLICTO');
+    if (status === CFG.STATUS_CANCELADO) throw _error('Está cancelado.', 'CONFLICTO');
+
+    const r = _aplicarStock(items, -1);
+    hoja.getRange(fila, colStatus + 1).setValue(CFG.STATUS_ENTREGADO);
+    props.setProperty(clave, JSON.stringify({ anterior: status, stock: r.aplicado }));
+    return { ok: true, status: CFG.STATUS_ENTREGADO,
+             faltantes: r.faltantes, recortados: r.recortados };
+  }
+
+  if (operacion === 'cancelar') {
+    if (status === CFG.STATUS_ENTREGADO) {
+      throw _error('Está entregado. Deshacé la entrega antes de cancelarlo.', 'CONFLICTO');
+    }
+    if (status === CFG.STATUS_CANCELADO) throw _error('Ya está cancelado.', 'CONFLICTO');
+
+    hoja.getRange(fila, colStatus + 1).setValue(CFG.STATUS_CANCELADO);
+    props.setProperty(clave, JSON.stringify({ anterior: status, stock: [] }));
+    return { ok: true, status: CFG.STATUS_CANCELADO };
+  }
+
+  if (operacion === 'deshacer') {
+    const crudo = props.getProperty(clave);
+    if (!crudo) throw _error('No hay nada que deshacer.', 'CONFLICTO');
+
+    const previo = JSON.parse(crudo);
+    if (previo.stock && previo.stock.length) _aplicarStock(previo.stock, +1);
+
+    hoja.getRange(fila, colStatus + 1).setValue(previo.anterior || CFG.STATUS_INICIAL);
+    props.deleteProperty(clave);
+    return { ok: true, status: previo.anterior || CFG.STATUS_INICIAL,
+             repuesto: (previo.stock || []).length };
+  }
+
+  throw _error('Operación de pedido desconocida: ' + operacion, 'ACCION_INVALIDA');
 }
 
 /**
