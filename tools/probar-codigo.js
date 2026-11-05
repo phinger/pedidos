@@ -1383,6 +1383,33 @@ probar('editar recalcula el detalle y el total', () => {
   igual(valorDe(hojas[1], 2, 'Total'), 7);
 });
 
+probar('se puede sumar un producto que no estaba en el pedido', () => {
+  const { ctx, hojas, token } = conPedido(3);        // entra solo con Almendras
+  const r = llamar(ctx, {
+    accion: 'editarPedido', token, fila: 2, id: 'P-0001',
+    items: [
+      { nombre: 'Almendras', cantidad: 3 },
+      { nombre: 'Nuez pecán', cantidad: 2 },         // este es nuevo
+      { nombre: 'Tofu', cantidad: 1 },               // y este también
+    ],
+  });
+  igual(r.detalle, 'Almendras x3; Nuez pecán x2; Tofu x1');
+  igual(r.total, 6);
+  igual(valorDe(hojas[1], 2, 'Detalle'), 'Almendras x3; Nuez pecán x2; Tofu x1');
+});
+
+probar('lo agregado al editar después se descuenta del stock', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  llamar(ctx, {
+    accion: 'editarPedido', token, fila: 2, id: 'P-0001',
+    items: [{ nombre: 'Almendras', cantidad: 3 }, { nombre: 'Tofu', cantidad: 2 }],
+  });
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+
+  igual(stockDe(hojas, 'Almendras'), 9, '12 - 3');
+  igual(stockDe(hojas, 'Tofu'), 3, '5 - 2, el agregado también descuenta');
+});
+
 probar('poner una cantidad en cero saca el producto del pedido', () => {
   const { ctx, hojas, token } = conPedido(3);
   llamar(ctx, {

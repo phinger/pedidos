@@ -47,6 +47,10 @@ const calcularMonto = (items, preciosPorNombre) => {
   return { monto, sinPrecio, completo: sinPrecio === 0 };
 };
 
+/* Igual que en la app del teléfono: sin valor no hay seguimiento de stock,
+   con cero está agotado. */
+const tieneStock = (p) => p.stock !== null && p.stock !== undefined;
+
 const $  = (sel) => document.querySelector(sel);
 
 const estado = {
@@ -655,7 +659,7 @@ function crearTarjetaPedido(p, precios) {
   const cancelado = p.status === estado.estados.cancelado;
 
   if (!entregado && !cancelado) {
-    acciones.appendChild(boton('Entregar', 'btn-primario', (b) => operar(p, 'entregar', b)));
+    acciones.appendChild(boton('Entregar', 'btn-entregar', (b) => operar(p, 'entregar', b)));
     acciones.appendChild(boton('Editar', null, () => abrirEdicion(p)));
     acciones.appendChild(boton('Cancelar', null, (b) => {
       if (confirm('¿Cancelar el pedido ' + p.id + ' de ' + p.nombre + '?')) operar(p, 'cancelar', b);
@@ -777,36 +781,134 @@ function abrirEdicion(pedido) {
   $('#editar-titulo').textContent = 'Pedido ' + pedido.id;
   $('#editar-sub').textContent = pedido.nombre + ' · ' + [pedido.fecha, pedido.hora].filter(Boolean).join(' ');
   $('#editar-error').hidden = true;
+  $('#pista-agregar').textContent = '';
+  $('#agregar-nombre').value = '';
+  $('#agregar-cantidad').value = '1';
+
+  /* Solo los activos: agregar a un pedido algo dado de baja del catálogo no
+     tiene a dónde ir después, ni para el stock ni para el precio. */
+  const sugerencias = $('#catalogo-nombres');
+  sugerencias.innerHTML = '';
+  estado.productos
+    .filter((p) => p.activo)
+    .forEach((p) => {
+      const op = document.createElement('option');
+      op.value = p.nombre;
+      sugerencias.appendChild(op);
+    });
 
   const cont = $('#editar-items');
   cont.innerHTML = '';
+  pedido.items.forEach((item) => cont.appendChild(filaEditable(item.nombre, item.cantidad, false)));
 
-  pedido.items.forEach((item) => {
-    const fila = document.createElement('div');
-    fila.className = 'item-editable';
-
-    const nombre = document.createElement('span');
-    nombre.textContent = item.nombre;
-
-    const cantidad = document.createElement('input');
-    cantidad.type = 'number';
-    cantidad.min = '0';
-    cantidad.step = '1';
-    cantidad.value = item.cantidad;
-    cantidad.setAttribute('aria-label', 'cantidad de ' + item.nombre);
-    /* Poner cero tacha el renglón: se ve que va a salir del pedido antes de
-       guardar, en vez de descubrirlo después. */
-    cantidad.addEventListener('input', () => {
-      fila.dataset.fuera = String(!(Number(cantidad.value) > 0));
-    });
-
-    fila.dataset.fuera = String(!(item.cantidad > 0));
-    fila.append(nombre, cantidad);
-    cont.appendChild(fila);
-  });
-
+  renderTotalEdicion();
   $('#velo').hidden = false;
   $('#dialogo-editar').hidden = false;
+}
+
+/** Un renglón del pedido dentro del diálogo. */
+function filaEditable(nombre, cantidad, esNuevo) {
+  const fila = document.createElement('div');
+  fila.className = 'item-editable' + (esNuevo ? ' item-nuevo' : '');
+  fila.dataset.nombre = nombre;
+
+  const etiqueta = document.createElement('span');
+  etiqueta.textContent = nombre;
+
+  const entrada = document.createElement('input');
+  entrada.type = 'number';
+  entrada.min = '0';
+  entrada.step = '1';
+  entrada.value = cantidad;
+  entrada.setAttribute('aria-label', 'cantidad de ' + nombre);
+  /* Poner cero tacha el renglón: se ve que va a salir del pedido antes de
+     guardar, en vez de descubrirlo después. */
+  entrada.addEventListener('input', () => {
+    fila.dataset.fuera = String(!(Number(entrada.value) > 0));
+    renderTotalEdicion();
+  });
+
+  const quitar = document.createElement('button');
+  quitar.className = 'quitar';
+  quitar.type = 'button';
+  quitar.textContent = '✕';
+  quitar.title = 'Quitar del pedido';
+  quitar.setAttribute('aria-label', 'quitar ' + nombre);
+  quitar.addEventListener('click', () => {
+    entrada.value = '0';
+    fila.dataset.fuera = 'true';
+    renderTotalEdicion();
+  });
+
+  fila.dataset.fuera = String(!(cantidad > 0));
+  fila.append(etiqueta, entrada, quitar);
+  return fila;
+}
+
+function itemsDelDialogo() {
+  return Array.from($('#editar-items').children).map((fila) => ({
+    nombre: fila.dataset.nombre,
+    cantidad: Number(fila.querySelector('input').value) || 0,
+  }));
+}
+
+function renderTotalEdicion() {
+  const r = calcularMonto(itemsDelDialogo().filter((i) => i.cantidad > 0), indicePrecios());
+  const el = $('#editar-monto');
+  el.textContent = r.monto || r.completo ? dinero.format(r.monto) : '—';
+  el.dataset.incompleto = String(!r.completo);
+  el.title = r.completo ? '' : r.sinPrecio + ' producto(s) sin precio cargado';
+}
+
+/**
+ * Suma un producto al pedido que se está editando.
+ *
+ * El nombre se resuelve contra el catálogo y se guarda con la grafía de ahí:
+ * el descuento de stock y el precio cruzan por nombre, así que un "almendras"
+ * escrito a mano quedaría huérfano.
+ */
+function agregarItemAlPedido() {
+  const pista = $('#pista-agregar');
+  const escrito = $('#agregar-nombre').value.trim();
+  const cantidad = Math.floor(Number($('#agregar-cantidad').value)) || 0;
+
+  const avisar = (texto, esError) => {
+    pista.textContent = texto;
+    pista.dataset.error = String(!!esError);
+  };
+
+  if (!escrito) { avisar('Elegí un producto de la lista', true); $('#agregar-nombre').focus(); return; }
+  if (cantidad < 1) { avisar('La cantidad tiene que ser al menos 1', true); return; }
+
+  const producto = estado.productos.find(
+    (p) => p.activo && claveNombre(p.nombre) === claveNombre(escrito));
+  if (!producto) {
+    avisar('"' + escrito + '" no está en el catálogo. Elegilo de la lista.', true);
+    return;
+  }
+
+  /* Si ya estaba en el pedido se suma a ese renglón, en vez de dejar el mismo
+     producto dos veces. */
+  const existente = Array.from($('#editar-items').children)
+    .find((fila) => claveNombre(fila.dataset.nombre) === claveNombre(producto.nombre));
+
+  if (existente) {
+    const entrada = existente.querySelector('input');
+    entrada.value = (Number(entrada.value) || 0) + cantidad;
+    existente.dataset.fuera = 'false';
+    avisar('Se sumaron ' + cantidad + ' a ' + producto.nombre + ', que ya estaba en el pedido');
+  } else {
+    $('#editar-items').appendChild(filaEditable(producto.nombre, cantidad, true));
+    const faltante = tieneStock(producto) && cantidad > producto.stock;
+    avisar(faltante
+      ? producto.nombre + ' agregado, pero en stock hay ' + producto.stock
+      : producto.nombre + ' agregado', faltante);
+  }
+
+  $('#agregar-nombre').value = '';
+  $('#agregar-cantidad').value = '1';
+  $('#agregar-nombre').focus();
+  renderTotalEdicion();
 }
 
 function cerrarEdicion() {
@@ -819,10 +921,7 @@ async function guardarEdicion() {
   const pedido = estado.editando;
   if (!pedido) return;
 
-  const items = Array.from($('#editar-items').children).map((fila) => ({
-    nombre: fila.querySelector('span').textContent,
-    cantidad: Number(fila.querySelector('input').value) || 0,
-  }));
+  const items = itemsDelDialogo();
 
   const boton = $('#btn-guardar-edicion');
   boton.disabled = true;
@@ -1016,6 +1115,15 @@ function conectarEventos() {
   $('#lote-cancelar').addEventListener('click', () => operarLote('cancelar'));
   $('#lote-deshacer').addEventListener('click', () => operarLote('deshacer'));
   $('#lote-limpiar').addEventListener('click', () => { estado.seleccion.clear(); render(); });
+
+  $('#btn-agregar-item').addEventListener('click', agregarItemAlPedido);
+  ['#agregar-nombre', '#agregar-cantidad'].forEach((sel) => {
+    $(sel).addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      agregarItemAlPedido();
+    });
+  });
 
   $('#btn-cancelar-edicion').addEventListener('click', cerrarEdicion);
   $('#btn-guardar-edicion').addEventListener('click', guardarEdicion);

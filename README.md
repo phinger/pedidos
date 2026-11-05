@@ -169,7 +169,7 @@ nombre o producto. Sobre cada pedido:
 | Acción | Qué hace |
 |---|---|
 | **Entregar** | Descuenta el stock y pasa el pedido a `Entregado` |
-| **Editar** | Corrige las cantidades; recalcula detalle y total |
+| **Editar** | Corrige cantidades y suma productos nuevos; recalcula detalle y total |
 | **Cancelar** | Pasa a `Cancelado` y lo saca de la cola de etiquetas, sin tocar el stock |
 | **Deshacer** | Vuelve al estado anterior; si era una entrega, repone el stock |
 
@@ -197,6 +197,19 @@ cruza—, el monto aparece en gris con un *+N sin precio*: suma lo que puede y
 avisa de lo que falta, en vez de mostrar un número que no es. Al entregar en
 esa situación se congela lo que se pudo calcular y la pantalla lo advierte, que
 es el momento en que todavía se puede corregir.
+
+### Editar un pedido
+
+El diálogo permite cambiar cantidades, quitar renglones —poner cero o la cruz
+los tacha antes de guardar— y **sumar productos que no estaban**. El nombre se
+resuelve contra el catálogo y se guarda con la grafía de ahí: el descuento de
+stock y el precio cruzan por nombre, así que uno escrito a mano quedaría
+huérfano. Si el producto ya estaba en el pedido, la cantidad se suma a ese
+renglón en vez de duplicarlo.
+
+El total del pedido se actualiza mientras se edita. Agregar más unidades de las
+que hay en stock avisa pero no bloquea: es una herramienta de corrección y
+quien la usa sabe lo que tiene.
 
 ### Selección múltiple
 
