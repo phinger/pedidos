@@ -20,7 +20,14 @@ const LS = {
   estadoOAuth: 'pedidos.oauth_state',
   destino:   'pedidos.destino',
   tema:      'pedidos.tema',
+  modo:      'pedidos.modo',
 };
+
+/* Claro, oscuro, o lo que diga el sistema. Tres estados y no un interruptor:
+   quien no eligió nada quiere que siga al teléfono, y eso hay que poder
+   distinguirlo de haber elegido claro. */
+const MODOS = ['auto', 'claro', 'oscuro'];
+const NOMBRE_MODO = { auto: 'Automático', claro: 'Claro', oscuro: 'Oscuro' };
 
 const CATALOGO_FRESCO_MS = 5 * 60 * 1000;   // pasado esto, refresca en segundo plano
 const TODAS = '__todas__';
@@ -791,11 +798,26 @@ function rotularTema() {
     : 'Diseño editorial';
 }
 
+function rotularModo() {
+  const actual = document.documentElement.dataset.modo || 'auto';
+  $('#modo-etiqueta').textContent = 'Modo: ' + NOMBRE_MODO[actual].toLowerCase();
+}
+
+function cambiarModo() {
+  const actual = document.documentElement.dataset.modo || 'auto';
+  const siguiente = MODOS[(MODOS.indexOf(actual) + 1) % MODOS.length];
+  document.documentElement.dataset.modo = siguiente;
+  try { localStorage.setItem(LS.modo, siguiente); } catch { /* sin almacenamiento */ }
+  rotularModo();
+  aviso('Modo ' + NOMBRE_MODO[siguiente].toLowerCase());
+}
+
 function cambiarTema() {
   const nuevo = temaActual() === 'editorial' ? 'clasico' : 'editorial';
   document.documentElement.dataset.tema = nuevo;
   try { localStorage.setItem(LS.tema, nuevo); } catch { /* sin almacenamiento */ }
   rotularTema();
+  rotularModo();
   cerrarHojas();
   aviso(nuevo === 'editorial' ? 'Diseño editorial' : 'Diseño clásico');
 }
@@ -851,7 +873,7 @@ function conectarEventos() {
     const u = estado.usuario;
     /* La versión sirve para saber de un vistazo si el teléfono está corriendo
        el build que se acaba de publicar. */
-    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v27';
+    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v28';
     abrirHoja('#p-menu');
   };
   $('#btn-etiquetas').onclick = generarEtiquetas;
@@ -859,6 +881,7 @@ function conectarEventos() {
   $('#btn-cerrar-etiquetas').onclick = cerrarHojas;
   $('#btn-catalogo').onclick = () => { location.href = './admin/'; };
   $('#btn-tema').onclick = cambiarTema;
+  $('#btn-modo').onclick = cambiarModo;
   $('#btn-refrescar').onclick = () => { cerrarHojas(); refrescarCatalogo(true); };
   $('#btn-vaciar').onclick = () => { cerrarHojas(); vaciarPedido(); aviso('Pedido vaciado'); };
   $('#btn-salir').onclick = () => cerrarSesion(false);

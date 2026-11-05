@@ -23,8 +23,11 @@
   --seg-bottom:   env(safe-area-inset-bottom, 0px);
 }
 
+/* Tres estados, no dos: sin preferencia explícita manda el sistema; con
+   ella manda la elección. Por eso el bloque oscuro se repite: una vez
+   tras el media query —ignorado si se pidió claro— y otra forzado. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-modo="claro"]) {
     --fondo:        #101114;
     --superficie:   #191a1f;
     --superficie-2: #212229;
@@ -39,6 +42,21 @@
     --sombra-alta:  0 -8px 32px rgba(0,0,0,.5);
   }
 }
+
+:root[data-modo="oscuro"] {
+    --fondo:        #101114;
+    --superficie:   #191a1f;
+    --superficie-2: #212229;
+    --texto:        #f2f2f0;
+    --tenue:        #9a9ba5;
+    --borde:        #2a2b33;
+    --acento:       #ff6a41;
+    --acento-texto: #1a0d07;
+    --acento-suave: #2a1a13;
+    --peligro:      #ff6b5e;
+    --sombra:       0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    --sombra-alta:  0 -8px 32px rgba(0,0,0,.5);
+  }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 

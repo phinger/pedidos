@@ -122,6 +122,24 @@ function irAIniciarSesion() {
   location.href = '../?next=admin';
 }
 
+/* ── Modo claro / oscuro ─────────────────────────────────────────────── */
+
+/* Tres estados y no un interruptor: quien no eligió nada quiere que siga al
+   sistema, y eso hay que poder distinguirlo de haber elegido claro. */
+const MODOS = ['auto', 'claro', 'oscuro'];
+
+function rotularModo() {
+  $('#btn-modo').textContent = 'Modo: ' + (document.documentElement.dataset.modo || 'auto');
+}
+
+function cambiarModo() {
+  const actual = document.documentElement.dataset.modo || 'auto';
+  const siguiente = MODOS[(MODOS.indexOf(actual) + 1) % MODOS.length];
+  document.documentElement.dataset.modo = siguiente;
+  try { localStorage.setItem('pedidos.modo', siguiente); } catch { /* sin almacenamiento */ }
+  rotularModo();
+}
+
 /* ── Avisos ──────────────────────────────────────────────────────────── */
 
 let avisoTimer;
@@ -1135,6 +1153,9 @@ function conectarEventos() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !$('#dialogo-editar').hidden) cerrarEdicion();
   });
+
+  rotularModo();
+  $('#btn-modo').addEventListener('click', cambiarModo);
 
   $('#btn-recargar').addEventListener('click', () => {
     cargar();

@@ -17,7 +17,7 @@
 /* Se sube a mano con cada cambio que haya que publicar. doGet lo devuelve, así
    que abriendo la URL /exec en el navegador se ve qué versión está realmente
    publicada — que no es lo mismo que la que muestra el editor. */
-const VERSION_API = 10;
+const VERSION_API = 11;
 
 const CFG = {
   /* ── Solapas ──────────────────────────────────────────────────────── */
@@ -1258,6 +1258,106 @@ function accionEditarPedido(p, sesion) {
 
     return { ok: true, detalle: detalle, total: total, items: items,
              recortados: r.recortados, faltantes: r.faltantes };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+/**
+ * Pedidos vivos —ni entregados ni cancelados— que no tienen stock reservado.
+ *
+ * Son los que se cargaron antes de que el descuento pasara a la carga del
+ * pedido: existen, van a salir del depósito, y el catálogo todavía los cuenta
+ * como disponibles.
+ */
+function _pedidosSinReserva() {
+  const { hoja, col, colStatus } = _mapaPedidos();
+  const valores = hoja.getDataRange().getValues();
+  const pendientes = [];
+
+  for (let i = 1; i < valores.length; i++) {
+    const id = String(valores[i][col.id] || '').trim();
+    if (!id) continue;
+
+    const status = colStatus >= 0 ? String(valores[i][colStatus] || '').trim() : '';
+    if (status === CFG.STATUS_ENTREGADO || status === CFG.STATUS_CANCELADO) continue;
+    if (_retenidoPor(id).length) continue;        // ya reserva, no se toca
+
+    pendientes.push({
+      fila: i + 1,
+      id: id,
+      nombre: col.nombre >= 0 ? String(valores[i][col.nombre] || '') : '',
+      status: status,
+      items: _parsearDetalle(valores[i][col.detalle]),
+    });
+  }
+  return pendientes;
+}
+
+/**
+ * Informa qué pasaría al poner el stock al día. No escribe nada.
+ * Ejecutar esta antes que reconciliarStock().
+ */
+function revisarStockPendiente() {
+  const pendientes = _pedidosSinReserva();
+  if (!pendientes.length) {
+    Logger.log('No hay nada que reconciliar: todos los pedidos vivos ya reservan stock.');
+    return;
+  }
+
+  Logger.log('%s pedido(s) vivos sin stock reservado:', pendientes.length);
+  pendientes.forEach(function (p) {
+    Logger.log('   %s · %s · %s · %s', p.id, p.status, p.nombre,
+      p.items.map(function (i) { return i.nombre + ' x' + i.cantidad; }).join(', '));
+  });
+
+  /* Cuánto se va a descontar de cada producto, sumando todos los pedidos. */
+  const porProducto = {};
+  pendientes.forEach(function (p) {
+    p.items.forEach(function (i) {
+      porProducto[i.nombre] = (porProducto[i.nombre] || 0) + i.cantidad;
+    });
+  });
+  Logger.log('\nSe descontaría del stock:');
+  Object.keys(porProducto).sort().forEach(function (nombre) {
+    Logger.log('   %s  −%s', nombre, porProducto[nombre]);
+  });
+  Logger.log('\nPara aplicarlo, ejecutá reconciliarStock().');
+}
+
+/**
+ * Reserva el stock de los pedidos vivos que todavía no lo tenían.
+ *
+ * Es idempotente: un pedido que ya reserva se saltea, así que correrla dos
+ * veces no descuenta dos veces. Sirve una sola vez, para la transición al
+ * modelo en que el stock se descuenta al cargar el pedido.
+ */
+function reconciliarStock() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) throw _error('El servidor está ocupado. Probá de nuevo.', 'OCUPADO');
+
+  try {
+    const pendientes = _pedidosSinReserva();
+    if (!pendientes.length) {
+      Logger.log('No había nada que reconciliar.');
+      return;
+    }
+
+    const recortados = [];
+    pendientes.forEach(function (p) {
+      const r = _retenerStock(p.id, p.items);
+      r.recortados.forEach(function (x) { recortados.push(p.id + ': ' + x.nombre); });
+    });
+
+    CacheService.getScriptCache().remove('catalogo');
+    SpreadsheetApp.flush();
+
+    Logger.log('%s pedido(s) pasaron a reservar stock.', pendientes.length);
+    if (recortados.length) {
+      Logger.log('No alcanzaba el stock en: %s — quedaron en cero.', recortados.join('; '));
+    }
+    Logger.log('Correrla de nuevo no vuelve a descontar: los que ya reservan se saltean.');
   } finally {
     lock.releaseLock();
   }

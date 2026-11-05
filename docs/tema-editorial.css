@@ -25,8 +25,11 @@
   --mono:  'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Tres estados, no dos: sin preferencia explícita manda el sistema; con
+   ella manda la elección. Por eso el bloque oscuro se repite: una vez
+   tras el media query —ignorado si se pidió claro— y otra forzado. */
 @media (prefers-color-scheme: dark) {
-  :root[data-tema="editorial"] {
+  :root[data-tema="editorial"]:not([data-modo="claro"]) {
     --fondo:        #15120f;
     --superficie:   #1d1916;
     --superficie-2: #272019;
@@ -40,6 +43,20 @@
     --peligro:      #e08b80;
   }
 }
+
+:root[data-tema="editorial"][data-modo="oscuro"] {
+    --fondo:        #15120f;
+    --superficie:   #1d1916;
+    --superficie-2: #272019;
+    --texto:        #f2ece1;
+    --tenue:        #a2978a;
+    --borde:        #302a23;
+    --borde-firme:  #453c32;
+    --acento:       #d4857c;
+    --acento-texto: #15120f;
+    --acento-suave: #2a1f1c;
+    --peligro:      #e08b80;
+  }
 
 :root[data-tema="editorial"] body { font-family: var(--sans); }
 

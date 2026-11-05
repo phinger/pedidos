@@ -18,8 +18,11 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
+/* Tres estados, no dos: sin preferencia explícita manda el sistema; con
+   ella manda la elección. Por eso el bloque oscuro se repite: una vez
+   tras el media query —ignorado si se pidió claro— y otra forzado. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-modo="claro"]) {
     --fondo:        #101114;
     --superficie:   #191a1f;
     --superficie-2: #212229;
@@ -34,6 +37,21 @@
     --sombra:       0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
   }
 }
+
+:root[data-modo="oscuro"] {
+    --fondo:        #101114;
+    --superficie:   #191a1f;
+    --superficie-2: #212229;
+    --texto:        #f2f2f0;
+    --tenue:        #9a9ba5;
+    --borde:        #2a2b33;
+    --acento:       #ff6a41;
+    --ok:           #4cc38a;
+    --peligro:      #ff6b5e;
+    --alerta:       #e0a84e;
+    --azul:         #3d8ae0;
+    --sombra:       0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }

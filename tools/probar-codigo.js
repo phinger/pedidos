@@ -1126,8 +1126,12 @@ function conPedido(cantidad = 3) {
   return { ctx, hojas, token };
 }
 
+/* Busca la fila por la columna de nombre, que se corre cuando se inserta
+   Código: con un índice fijo la prueba depende de cuándo se llamó a catalogo. */
 const stockDe = (hojas, nombre) => {
-  const f = hojas[0].datos.findIndex((fila) => fila[1] === nombre);
+  const col = hojas[0].datos[0].findIndex((h) => String(h).toUpperCase() === 'NOMBRES');
+  const f = hojas[0].datos.findIndex((fila) => fila[col] === nombre);
+  if (f < 0) throw new Error('No encontré el producto "' + nombre + '" en el catálogo');
   return valorDe(hojas[0], f + 1, 'Stock');
 };
 
@@ -1249,6 +1253,71 @@ probar('un pedido repetido no descuenta dos veces', () => {
   llamar(ctx, envio);
   llamar(ctx, envio);
   igual(stockDe(hojas, 'Almendras'), 9, 'el reintento devuelve el mismo pedido y no toca stock');
+});
+
+console.log('\nReconciliación del stock heredado');
+
+/* Simula lo que dejó el modelo viejo: pedidos escritos a mano en la planilla,
+   sin reserva de stock registrada. */
+function conPedidosHeredados() {
+  const { ctx, hojas } = entornoCatalogo();
+  const token = login(ctx).token;
+  llamar(ctx, { accion: 'catalogo', token });
+
+  hojas[1].datos.push(['P-0001', new Date(), '09:14', 'Gimena', 'Almendras x3', 3, 'Pendiente', 'x@y.com']);
+  hojas[1].datos.push(['P-0002', new Date(), '09:40', 'Marcelo', 'Almendras x2', 2, 'Impreso', 'x@y.com']);
+  hojas[1].datos.push(['P-0003', new Date(), '10:10', 'Ana', 'Almendras x4', 4, 'Entregado', 'x@y.com']);
+  hojas[1].datos.push(['P-0004', new Date(), '10:30', 'Juan', 'Almendras x1', 1, 'Cancelado', 'x@y.com']);
+  return { ctx, hojas, token };
+}
+
+probar('revisar no toca el stock', () => {
+  const { ctx, hojas } = conPedidosHeredados();
+  ctx.revisarStockPendiente();
+  igual(stockDe(hojas, 'Almendras'), 12, 'revisar solo informa');
+});
+
+probar('reconciliar reserva solo los pedidos vivos', () => {
+  const { ctx, hojas } = conPedidosHeredados();
+  ctx.reconciliarStock();
+  igual(stockDe(hojas, 'Almendras'), 7,
+    '12 - 3 (pendiente) - 2 (impreso); el entregado y el cancelado no cuentan');
+});
+
+probar('reconciliar dos veces no descuenta dos veces', () => {
+  const { ctx, hojas } = conPedidosHeredados();
+  ctx.reconciliarStock();
+  ctx.reconciliarStock();
+  igual(stockDe(hojas, 'Almendras'), 7, 'los que ya reservan se saltean');
+});
+
+probar('no toca los pedidos que ya reservaban', () => {
+  const { ctx, hojas, token } = conPedidosHeredados();
+  const productos = llamar(ctx, { accion: 'productos', token }).productos;
+  llamar(ctx, {                                   // este nace con el modelo nuevo
+    accion: 'pedido', token, nombre: 'Nuevo', clave: 'kn',
+    items: [{ id: productos[0].id, cantidad: 2 }],
+  });
+  igual(stockDe(hojas, 'Almendras'), 10, '12 - 2 del pedido nuevo');
+
+  ctx.reconciliarStock();
+  igual(stockDe(hojas, 'Almendras'), 5, '10 - 3 - 2 de los heredados, el nuevo intacto');
+});
+
+probar('después de reconciliar, cancelar devuelve lo reservado', () => {
+  const { ctx, hojas, token } = conPedidosHeredados();
+  ctx.reconciliarStock();
+  igual(stockDe(hojas, 'Almendras'), 7);
+
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'cancelar' });
+  igual(stockDe(hojas, 'Almendras'), 10, 'devuelve los 3 del pedido reconciliado');
+});
+
+probar('sin nada que reconciliar, no hace nada', () => {
+  const { ctx, hojas } = entornoCatalogo();
+  login(ctx);
+  ctx.reconciliarStock();
+  igual(stockDe(hojas, 'Almendras'), 12);
 });
 
 console.log('\nPedidos: estados');

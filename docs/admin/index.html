@@ -8,10 +8,10 @@
 <meta name="theme-color" content="#101114" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="../icons/icon-192.png">
-<link rel="stylesheet" href="admin.css?v=27">
+<link rel="stylesheet" href="admin.css?v=28">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&amp;family=IBM+Plex+Mono:wght@400;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
-<link rel="stylesheet" href="tema-editorial.css?v=27">
+<link rel="stylesheet" href="tema-editorial.css?v=28">
 </head>
 <body>
 
@@ -48,6 +48,7 @@
           <input type="checkbox" id="ver-inactivos">
           <span>Ver inactivos</span>
         </label>
+        <button class="btn btn-fantasma" id="btn-modo" title="Claro, oscuro o según el sistema">Modo: auto</button>
         <button class="btn btn-fantasma" id="btn-recargar">Recargar</button>
       </div>
     </div>
@@ -155,7 +156,7 @@
 
 <div class="aviso" id="aviso" hidden role="status"></div>
 
-<script src="../config.js?v=27"></script>
+<script src="../config.js?v=28"></script>
 <script>
 /* Antes de pintar, para que no se vea un parpadeo del tema anterior.
    Prioridad: lo que diga la URL, después la preferencia del dispositivo,
@@ -167,11 +168,18 @@
     var elegido = url || localStorage.getItem('pedidos.tema') ||
       (window.PEDIDOS_CONFIG && window.PEDIDOS_CONFIG.tema) || 'editorial';
     document.documentElement.dataset.tema = elegido;
+
+    /* 'auto' sigue al sistema; 'claro' y 'oscuro' lo ignoran. */
+    var modoUrl = new URLSearchParams(location.search).get('modo');
+    if (modoUrl) localStorage.setItem('pedidos.modo', modoUrl);
+    document.documentElement.dataset.modo =
+      modoUrl || localStorage.getItem('pedidos.modo') || 'auto';
   } catch (e) {
     document.documentElement.dataset.tema = 'editorial';
+    document.documentElement.dataset.modo = 'auto';
   }
 })();
 </script>
-<script src="admin.js?v=27"></script>
+<script src="admin.js?v=28"></script>
 </body>
 </html>

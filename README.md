@@ -389,6 +389,16 @@ Y si hubiera que deshacer el cambio entero, el commit anterior está etiquetado:
 `git diff diseno-clasico` muestra exactamente qué se tocó, y
 `git revert` sobre esos commits lo deshace.
 
+### Claro y oscuro
+
+Los dos temas vienen en claro y en oscuro. Por defecto siguen al sistema; la
+app y la administración tienen un control de tres estados —**Automático,
+Claro, Oscuro**— que fija la elección para ese dispositivo. También con
+`?modo=claro` en la URL.
+
+Son tres estados y no un interruptor a propósito: quien no eligió nada quiere
+que siga al teléfono, y eso hay que poder distinguirlo de haber elegido claro.
+
 Las fuentes vienen de Google Fonts. Sin conexión caen a Georgia y a la
 tipografía del sistema: cambia el aire, no la usabilidad.
 
