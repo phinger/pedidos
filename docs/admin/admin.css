@@ -370,6 +370,12 @@ tfoot input:focus {
   white-space: nowrap;
 }
 .pedido-monto[data-incompleto="true"] { color: var(--tenue); }
+/* El candadito marca que ese número ya no se mueve. */
+.pedido-monto[data-congelado="true"]::after {
+  content: " 🔒";
+  font-size: 10px;
+  opacity: .5;
+}
 .monto-falta {
   display: block;
   font-size: 11px;

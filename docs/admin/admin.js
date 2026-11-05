@@ -402,6 +402,20 @@ function crearFila(p) {
 
 /* ── Pedidos ─────────────────────────────────────────────────────────── */
 
+/**
+ * Lo que vale un pedido.
+ *
+ * Si tiene monto guardado es porque se entregó: ese número quedó congelado a
+ * los precios de ese momento y no se vuelve a tocar, aunque después cambien
+ * las listas. Si no, se calcula contra los precios de hoy.
+ */
+function montoDePedido(pedido, precios) {
+  if (pedido.monto !== null && pedido.monto !== undefined) {
+    return { monto: pedido.monto, sinPrecio: 0, completo: true, congelado: true };
+  }
+  return Object.assign(calcularMonto(pedido.items, precios), { congelado: false });
+}
+
 /* Índice nombre → precio de venta, para no recorrer el catálogo entero por
    cada renglón de cada pedido. */
 function indicePrecios() {
@@ -535,7 +549,7 @@ function renderResumenPedidos() {
   let suma = 0;
   let incompletos = 0;
   visibles.forEach((p) => {
-    const r = calcularMonto(p.items, precios);
+    const r = montoDePedido(p, precios);
     suma += r.monto;
     if (!r.completo) incompletos++;
   });
@@ -601,11 +615,13 @@ function crearTarjetaPedido(p, precios) {
   const derecha = document.createElement('div');
   derecha.className = 'pedido-derecha';
 
-  const { monto, sinPrecio, completo } = calcularMonto(p.items, precios);
+  const { monto, sinPrecio, completo, congelado } = montoDePedido(p, precios);
   const importe = document.createElement('div');
   importe.className = 'pedido-monto';
   importe.dataset.incompleto = String(!completo);
+  importe.dataset.congelado = String(congelado);
   importe.textContent = completo || monto > 0 ? dinero.format(monto) : '—';
+  if (congelado) importe.title = 'Precio al momento de la entrega';
   if (!completo) {
     const falta = document.createElement('span');
     falta.className = 'monto-falta';
@@ -660,8 +676,13 @@ async function operar(pedido, operacion, boton) {
   try {
     const r = await api('estadoPedido', { fila: pedido.fila, id: pedido.id, operacion });
     pedido.status = r.status;
+    if ('monto' in r) pedido.monto = r.monto;
 
     if (operacion === 'entregar') {
+      if (r.sinPrecio) {
+        aviso('Entregado, pero ' + r.sinPrecio +
+          ' producto(s) no tenían precio: el monto quedó incompleto', 'error');
+      }
       /* El descuadre no frena la entrega, pero tiene que verse: la planilla y
          el depósito no coinciden y alguien lo tiene que revisar. */
       if (r.recortados && r.recortados.length) {
@@ -712,7 +733,9 @@ async function operarLote(operacion) {
     const porId = new Map(r.resultados.map((x) => [x.id, x]));
     estado.pedidos.forEach((p) => {
       const res = porId.get(p.id);
-      if (res && res.ok) p.status = res.status;
+      if (!res || !res.ok) return;
+      p.status = res.status;
+      if ('monto' in res) p.monto = res.monto;
     });
 
     const fallados = r.resultados.filter((x) => !x.ok);

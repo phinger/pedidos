@@ -274,6 +274,15 @@ const valorDe = (hoja, fila, titulo) => {
   return hoja.datos[fila - 1][i];
 };
 
+const ponerEn = (hoja, fila, titulo, valor) => {
+  const i = hoja.datos[0].findIndex((h) => String(h).toLowerCase() === titulo.toLowerCase());
+  if (i < 0) throw new Error('No existe la columna "' + titulo + '" en ' + hoja.nombre);
+  hoja.datos[fila - 1][i] = valor;
+};
+
+const tieneColumna = (hoja, titulo) =>
+  hoja.datos[0].some((h) => String(h).toLowerCase() === titulo.toLowerCase());
+
 const llamar = (ctx, cuerpo) =>
   JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(cuerpo) } }).getContent());
 
@@ -1153,7 +1162,7 @@ probar('deshacer la entrega repone el stock y el status anterior', () => {
 
 probar('el stock nunca queda negativo, y avisa del faltante', () => {
   const { ctx, hojas, token } = conPedido(12);
-  hojas[0].datos[1][5] = 2;        // alguien se llevó mercadería sin registrarla
+  ponerEn(hojas[0], 2, 'Stock', 2);   // alguien se llevó mercadería sin registrarla
 
   const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
   igual(r.status, 'Entregado', 'la entrega no se frena');
@@ -1163,7 +1172,7 @@ probar('el stock nunca queda negativo, y avisa del faltante', () => {
 
 probar('deshacer repone lo descontado, no lo pedido', () => {
   const { ctx, hojas, token } = conPedido(12);
-  hojas[0].datos[1][5] = 2;
+  ponerEn(hojas[0], 2, 'Stock', 2);
   llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
   llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'deshacer' });
 
@@ -1172,7 +1181,7 @@ probar('deshacer repone lo descontado, no lo pedido', () => {
 
 probar('un producto que ya no está en el catálogo se informa', () => {
   const { ctx, hojas, token } = conPedido(3);
-  hojas[0].datos[1][1] = 'Almendras peladas';      // se renombró después del pedido
+  ponerEn(hojas[0], 2, 'NOMBRES', 'Almendras peladas');   // se renombró tras el pedido
 
   const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
   igual(r.status, 'Entregado');
@@ -1213,6 +1222,62 @@ probar('rechaza operar sobre una fila cuyo ID no coincide', () => {
     'CONFLICTO');
 });
 
+console.log('\nPedidos: monto congelado al entregar');
+
+const montoDe = (hojas, fila) => valorDe(hojas[1], fila, 'Monto');
+
+probar('entregar guarda el monto a los precios del momento', () => {
+  const { ctx, hojas, token } = conPedido(3);        // Almendras, precio 1800
+  const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+
+  igual(r.monto, 5400, '3 x 1800');
+  igual(montoDe(hojas, 2), 5400, 'tiene que quedar escrito en la planilla');
+});
+
+probar('cambiar el precio después no mueve lo entregado', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+
+  llamar(ctx, {
+    accion: 'guardarProducto', token,
+    fila: 2, nombreOriginal: 'Almendras', campos: { precio: 9999 },
+  });
+
+  igual(llamar(ctx, { accion: 'pedidos', token }).pedidos[0].monto, 5400,
+    'el monto congelado no se recalcula');
+});
+
+probar('deshacer la entrega descongela el monto', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'deshacer' });
+
+  igual(r.monto, null);
+  igual(montoDe(hojas, 2), '', 'la celda tiene que quedar vacía');
+  igual(llamar(ctx, { accion: 'pedidos', token }).pedidos[0].monto, null,
+    'vuelve a calcularse en la página');
+});
+
+probar('un pedido sin entregar no tiene monto guardado', () => {
+  const { ctx, token } = conPedido(3);
+  igual(llamar(ctx, { accion: 'pedidos', token }).pedidos[0].monto, null);
+});
+
+probar('informa cuántos productos quedaron sin precio al congelar', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  ponerEn(hojas[0], 2, 'Precio', '');                 // Almendras se queda sin precio
+
+  const r = llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'entregar' });
+  igual([r.monto, r.sinPrecio], [0, 1], 'congela lo que puede y avisa');
+});
+
+probar('cancelar no congela ningún monto', () => {
+  const { ctx, hojas, token } = conPedido(3);
+  llamar(ctx, { accion: 'estadoPedido', token, fila: 2, id: 'P-0001', operacion: 'cancelar' });
+  afirmar(!tieneColumna(hojas[1], 'Monto') || montoDe(hojas, 2) === '',
+    'solo la entrega congela el monto');
+});
+
 console.log('\nPedidos: operaciones en lote');
 
 /* Tres pedidos cargados, para operar de a varios. */
@@ -1242,6 +1307,7 @@ probar('entrega varios pedidos de una sola llamada', () => {
 
   igual(r.hechos, 3);
   igual(r.resultados.map((x) => x.status), ['Entregado', 'Entregado', 'Entregado']);
+  igual(r.resultados.map((x) => x.monto), [3600, 3600, 3600], 'cada uno con su monto congelado');
   igual(stockDe(hojas, 'Almendras'), 6, '12 - 2 - 2 - 2');
 });
 
@@ -1278,7 +1344,7 @@ probar('cancelar en lote no toca el stock', () => {
 
 probar('informa el faltante de stock del lote entero', () => {
   const { ctx, hojas, token } = conVariosPedidos();
-  hojas[0].datos[1][5] = 3;                    // hay 3 y los tres pedidos piden 2
+  ponerEn(hojas[0], 2, 'Stock', 3);            // hay 3 y los tres pedidos piden 2
 
   const r = lote(ctx, token, 'entregar', [2, 3, 4]);
   igual(r.hechos, 3, 'ninguna entrega se frena');

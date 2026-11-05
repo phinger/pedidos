@@ -17,7 +17,7 @@
 /* Se sube a mano con cada cambio que haya que publicar. doGet lo devuelve, así
    que abriendo la URL /exec en el navegador se ve qué versión está realmente
    publicada — que no es lo mismo que la que muestra el editor. */
-const VERSION_API = 8;
+const VERSION_API = 9;
 
 const CFG = {
   /* ── Solapas ──────────────────────────────────────────────────────── */
@@ -57,7 +57,11 @@ const CFG = {
     detalle: ['detalle', 'productos', 'items', 'pedido'],          // requerida
     total:   ['total', 'cantidad', 'totalitems', 'unidades'],
     email:   ['email', 'usuario', 'cargadopor', 'mail'],
+    monto:   ['monto', 'importe', 'totalpesos', 'preciototal'],
   },
+
+  /* Se crea sola en la solapa de pedidos cuando hace falta. */
+  COL_MONTO_TITULO: 'Monto',
   COL_STATUS: ['status', 'estado'],
 
   /* ── Cómo se completa la columna de status ─────────────────────────────
@@ -839,6 +843,18 @@ function _componerDetalle(items) {
     .join(CFG.SEPARADOR);
 }
 
+/** Agrega una columna al final de la hoja si no existe. Devuelve su índice. */
+function _asegurarColumna(hoja, titulo, alias) {
+  const ancho = Math.max(1, hoja.getLastColumn());
+  const encabezados = hoja.getRange(1, 1, 1, ancho).getValues()[0].map(_normalizar);
+  const indice = _buscarColumna(encabezados, alias);
+  if (indice >= 0) return indice;
+
+  hoja.getRange(1, ancho + 1).setValue(titulo).setFontWeight('bold');
+  hoja.setColumnWidth(ancho + 1, 110);
+  return ancho;
+}
+
 function _mapaPedidos() {
   const hoja = _hoja(CFG.HOJA_PEDIDOS);
   const encabezados = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn()))
@@ -876,6 +892,9 @@ function accionPedidos() {
       detalle: col.detalle >= 0 ? String(fila[col.detalle] || '') : '',
       items: col.detalle >= 0 ? _parsearDetalle(fila[col.detalle]) : [],
       total: col.total >= 0 ? _numero(fila[col.total]) : null,
+      /* Con valor, es el monto congelado de la entrega; sin valor, la página
+         lo calcula contra los precios de hoy. */
+      monto: col.monto >= 0 ? _numero(fila[col.monto]) : null,
       status: colStatus >= 0 ? String(fila[colStatus] || '').trim() : '',
       email: col.email >= 0 ? String(fila[col.email] || '') : '',
     });
@@ -919,13 +938,23 @@ function _aplicarStock(items, signo) {
   const encabezados = valores[0].map(_normalizar);
   const col = _mapearColumnas(encabezados, CFG.COLS_PRODUCTOS);
 
-  if (col.stock < 0 || col.nombre < 0) return { aplicado: [], faltantes: [], sinStock: [] };
+  if (col.nombre < 0) return { aplicado: [], faltantes: [], recortados: [], precios: {} };
 
+  /* El índice de precios sale de la misma lectura: congelar el monto de la
+     entrega no justifica volver a leer el catálogo entero. */
   const porNombre = {};
+  const precios = {};
   for (let i = 1; i < valores.length; i++) {
     const clave = _normalizar(valores[i][col.nombre]);
-    if (clave && !porNombre[clave]) porNombre[clave] = i + 1;
+    if (!clave) continue;
+    if (!porNombre[clave]) porNombre[clave] = i + 1;
+    if (col.precio >= 0 && precios[clave] === undefined) {
+      const p = _numero(valores[i][col.precio]);
+      if (p !== null) precios[clave] = p;
+    }
   }
+
+  if (col.stock < 0) return { aplicado: [], faltantes: [], recortados: [], precios: precios };
 
   const aplicado = [];
   const faltantes = [];
@@ -950,7 +979,19 @@ function _aplicarStock(items, signo) {
     aplicado.push({ nombre: item.nombre, cantidad: Math.abs(delta) });
   });
 
-  return { aplicado: aplicado, faltantes: faltantes, recortados: recortados };
+  return { aplicado: aplicado, faltantes: faltantes, recortados: recortados, precios: precios };
+}
+
+/** Suma del pedido a los precios que estaban vigentes en ese momento. */
+function _montoDeItems(items, precios) {
+  let monto = 0;
+  let sinPrecio = 0;
+  items.forEach(function (item) {
+    const p = precios[_normalizar(item.nombre)];
+    if (p === undefined) sinPrecio++;
+    else monto += p * item.cantidad;
+  });
+  return { monto: monto, sinPrecio: sinPrecio };
 }
 
 /**
@@ -1002,7 +1043,8 @@ function accionEstadoPedidos(p, sesion) {
     items.forEach(function (item) {
       try {
         const r = _operarPedido(ctx, Math.floor(Number(item.fila)), item.id, operacion);
-        resultados.push({ id: item.id, ok: true, status: r.status });
+        resultados.push({ id: item.id, ok: true, status: r.status,
+                          monto: r.monto === undefined ? null : r.monto });
         (r.recortados || []).forEach(function (x) { recortados.push(x); });
         (r.faltantes || []).forEach(function (x) {
           if (faltantes.indexOf(x) < 0) faltantes.push(x);
@@ -1054,9 +1096,16 @@ function _operarPedido(ctx, fila, id, operacion) {
     if (status === CFG.STATUS_CANCELADO) throw _error('Está cancelado.', 'CONFLICTO');
 
     const r = _aplicarStock(items, -1);
+
+    /* El monto se congela acá: después puede cambiar el precio del producto y
+       lo entregado tiene que seguir valiendo lo que valió. */
+    const colMonto = _asegurarColumna(hoja, CFG.COL_MONTO_TITULO, CFG.COLS_PEDIDOS.monto);
+    const m = _montoDeItems(items, r.precios);
+    hoja.getRange(fila, colMonto + 1).setValue(m.monto);
+
     hoja.getRange(fila, colStatus + 1).setValue(CFG.STATUS_ENTREGADO);
     props.setProperty(clave, JSON.stringify({ anterior: status, stock: r.aplicado }));
-    return { ok: true, status: CFG.STATUS_ENTREGADO,
+    return { ok: true, status: CFG.STATUS_ENTREGADO, monto: m.monto, sinPrecio: m.sinPrecio,
              faltantes: r.faltantes, recortados: r.recortados };
   }
 
@@ -1078,9 +1127,15 @@ function _operarPedido(ctx, fila, id, operacion) {
     const previo = JSON.parse(crudo);
     if (previo.stock && previo.stock.length) _aplicarStock(previo.stock, +1);
 
+    /* Deja de estar entregado, así que el monto vuelve a calcularse solo. */
+    const colMonto = _buscarColumna(
+      hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map(_normalizar),
+      CFG.COLS_PEDIDOS.monto);
+    if (colMonto >= 0) hoja.getRange(fila, colMonto + 1).clearContent();
+
     hoja.getRange(fila, colStatus + 1).setValue(previo.anterior || CFG.STATUS_INICIAL);
     props.deleteProperty(clave);
-    return { ok: true, status: previo.anterior || CFG.STATUS_INICIAL,
+    return { ok: true, status: previo.anterior || CFG.STATUS_INICIAL, monto: null,
              repuesto: (previo.stock || []).length };
   }
 

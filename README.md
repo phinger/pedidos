@@ -182,15 +182,21 @@ Cada pedido muestra cuánto suma a precio de venta: por cada renglón del
 detalle, la cantidad por el `Precio` del catálogo. Arriba, **Monto a la vista**
 suma los pedidos que deja ver el filtro puesto.
 
-Se calcula en el momento, cruzando el detalle contra el catálogo por nombre; no
-se guarda nada en la planilla. La consecuencia es que **el monto de un pedido
-viejo cambia si después se cambia el precio del producto**. Para que quede
-congelado al momento del pedido habría que guardar el precio en la fila, que es
-otro cambio.
+Mientras el pedido no está entregado, el monto **se calcula en el momento**
+cruzando el detalle contra el catálogo por nombre: si cambiás un precio, se
+actualiza.
+
+Al **entregar**, el monto se congela: se escribe en la columna `Monto` de la
+solapa `Pedidos` —que se crea sola la primera vez— con los precios vigentes en
+ese instante. A partir de ahí ese número no se mueve aunque después cambien las
+listas, y en la pantalla aparece con un candadito. Deshacer la entrega borra la
+celda y el monto vuelve a calcularse.
 
 Si algún producto del pedido no tiene precio cargado —o se renombró y ya no
 cruza—, el monto aparece en gris con un *+N sin precio*: suma lo que puede y
-avisa de lo que falta, en vez de mostrar un número que no es.
+avisa de lo que falta, en vez de mostrar un número que no es. Al entregar en
+esa situación se congela lo que se pudo calcular y la pantalla lo advierte, que
+es el momento en que todavía se puede corregir.
 
 ### Selección múltiple
 
