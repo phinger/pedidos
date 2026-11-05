@@ -2,7 +2,7 @@
    Ver README.md → "Pasos manuales". */
 window.PEDIDOS_CONFIG = {
   /* URL del Web App de Apps Script, terminada en /exec */
-  apiUrl:   'https://script.google.com/macros/s/AKfycbyg3KkaLa5OcPQFHtN92m_0_ELSRhsIP1-M0ymIJANxUroesRt849Cev83qb-eLm9YR/exec',
+  apiUrl:   'https://script.google.com/macros/s/AKfycbwWNXABJNrOYA00MlmEsJDyzOaYq1Nx0RqQI3NiiTKMODQ2iDWVrgA2AnsgLyMfyIo0/exec',
 
   /* Diseño: 'editorial' o 'clasico'. Cambiar esto acá lo cambia para todos.
      Cada dispositivo puede elegir el suyo desde el menú de la app, y
