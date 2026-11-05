@@ -681,6 +681,10 @@ async function confirmar() {
     $('#input-nombre').value = '';
     cerrarHojas();
     mostrarPantalla('#p-exito');
+
+    /* El stock se descuenta al confirmar, así que el listado que quedó atrás
+       ya está viejo: se refresca para el próximo pedido. */
+    refrescarCatalogo(false);
   } catch (e) {
     const err = $('#resumen-error');
     err.textContent = e.red
@@ -798,7 +802,7 @@ function conectarEventos() {
     const u = estado.usuario;
     /* La versión sirve para saber de un vistazo si el teléfono está corriendo
        el build que se acaba de publicar. */
-    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v24';
+    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v25';
     abrirHoja('#p-menu');
   };
   $('#btn-etiquetas').onclick = generarEtiquetas;

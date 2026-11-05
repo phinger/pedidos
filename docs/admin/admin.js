@@ -683,24 +683,20 @@ async function operar(pedido, operacion, boton) {
     if ('monto' in r) pedido.monto = r.monto;
 
     if (operacion === 'entregar') {
+      /* La entrega ya no mueve stock —se descontó al cargar el pedido—, así
+         que lo único que puede salir torcido es el monto. */
       if (r.sinPrecio) {
         aviso('Entregado, pero ' + r.sinPrecio +
           ' producto(s) no tenían precio: el monto quedó incompleto', 'error');
-      }
-      /* El descuadre no frena la entrega, pero tiene que verse: la planilla y
-         el depósito no coinciden y alguien lo tiene que revisar. */
-      if (r.recortados && r.recortados.length) {
-        aviso('Entregado. Faltaba stock de ' +
-          r.recortados.map((x) => x.nombre).join(', ') + ' — quedó en cero', 'error');
-      } else if (r.faltantes && r.faltantes.length) {
-        aviso('Entregado. No encontré en el catálogo: ' + r.faltantes.join(', '), 'error');
       } else {
         aviso('Pedido ' + pedido.id + ' entregado');
       }
+    } else if (operacion === 'cancelar') {
+      aviso('Pedido cancelado' + (r.repuesto ? ' · stock devuelto' : ''));
       await recargarCatalogo();
     } else {
-      aviso(operacion === 'cancelar' ? 'Pedido cancelado' : 'Se deshizo el cambio');
-      if (operacion === 'deshacer') await recargarCatalogo();
+      aviso('Se deshizo el cambio' + (r.retomado ? ' · stock vuelto a reservar' : ''));
+      await recargarCatalogo();
     }
     render();
   } catch (e) {
@@ -746,14 +742,16 @@ async function operarLote(operacion) {
     let texto = r.hechos + (r.hechos === 1 ? ' pedido' : ' pedidos') + ' ' +
       { entregar: 'entregados', cancelar: 'cancelados', deshacer: 'revertidos' }[operacion];
     if (fallados.length) texto += ' · ' + fallados.length + ' sin cambios: ' + fallados[0].error;
+    /* Al revivir cancelados puede no alcanzar el stock para volver a
+       reservarlo; al entregar, lo que puede faltar es el precio. */
     if (r.recortados && r.recortados.length) {
-      texto += ' · faltaba stock de ' +
+      texto += ' · no alcanzó el stock de ' +
         [...new Set(r.recortados.map((x) => x.nombre))].join(', ');
     }
-    if (r.faltantes && r.faltantes.length) {
-      texto += ' · no encontré en el catálogo: ' + r.faltantes.join(', ');
-    }
-    aviso(texto, fallados.length || (r.recortados || []).length ? 'error' : '');
+    const sinPrecio = r.resultados.filter((x) => x.sinPrecio).length;
+    if (sinPrecio) texto += ' · ' + sinPrecio + ' con el monto incompleto';
+
+    aviso(texto, fallados.length || (r.recortados || []).length || sinPrecio ? 'error' : '');
 
     estado.seleccion.clear();
     if (operacion !== 'cancelar') await recargarCatalogo();
@@ -932,7 +930,13 @@ async function guardarEdicion() {
     pedido.total = r.total;
     pedido.items = r.items;
     cerrarEdicion();
-    aviso('Pedido ' + pedido.id + ' actualizado');
+
+    /* Cambiar las cantidades cambia lo que el pedido tiene comprometido. */
+    const faltaba = (r.recortados || []).map((x) => x.nombre);
+    aviso(faltaba.length
+      ? 'Pedido ' + pedido.id + ' actualizado, pero no alcanzaba el stock de ' + faltaba.join(', ')
+      : 'Pedido ' + pedido.id + ' actualizado', faltaba.length ? 'error' : '');
+    await recargarCatalogo();
     render();
   } catch (e) {
     if (e.codigo === 'SIN_AUTORIZACION') return;

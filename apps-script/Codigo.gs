@@ -17,7 +17,7 @@
 /* Se sube a mano con cada cambio que haya que publicar. doGet lo devuelve, así
    que abriendo la URL /exec en el navegador se ve qué versión está realmente
    publicada — que no es lo mismo que la que muestra el editor. */
-const VERSION_API = 9;
+const VERSION_API = 10;
 
 const CFG = {
   /* ── Solapas ──────────────────────────────────────────────────────── */
@@ -459,33 +459,6 @@ function accionPedido(p, sesion) {
   const clave = String(p.clave || '').slice(0, 64);
   if (!clave) throw _error('Falta la clave del envío.', 'DATOS_INVALIDOS');
 
-  /* El nombre de cada producto se toma del catálogo, no de lo que mandó el
-     cliente: la planilla queda consistente aunque el borrador esté viejo. */
-  const catalogo = {};
-  accionProductos().productos.forEach(function (prod) { catalogo[prod.id] = prod; });
-
-  const lineas = [];
-  let total = 0;
-  for (let i = 0; i < items.length; i++) {
-    const cantidad = Math.floor(Number(items[i].cantidad));
-    if (!(cantidad >= 1 && cantidad <= CFG.MAX_CANTIDAD)) {
-      throw _error('Cantidad inválida en el pedido.', 'DATOS_INVALIDOS');
-    }
-    const prod = catalogo[items[i].id];
-    const nombreProducto = prod ? prod.nombre : String(items[i].nombre || '').trim();
-    if (!nombreProducto) throw _error('Hay un producto que ya no está en el catálogo.', 'DATOS_INVALIDOS');
-
-    /* El tope también se valida acá: el teléfono puede tener el catálogo
-       viejo, o el stock puede haber cambiado mientras armaban el pedido. */
-    if (prod && prod.stock !== null && cantidad > prod.stock) {
-      throw _error(prod.stock > 0
-        ? 'De ' + nombreProducto + ' quedan ' + prod.stock + '. Ajustá la cantidad y reintentá.'
-        : 'Ya no queda stock de ' + nombreProducto + '.', 'SIN_STOCK');
-    }
-    lineas.push(nombreProducto + ' x' + cantidad);
-    total += cantidad;
-  }
-
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(25000)) throw _error('El servidor está ocupado. Probá de nuevo.', 'OCUPADO');
 
@@ -494,6 +467,36 @@ function accionPedido(p, sesion) {
     const claveIdem = 'k_' + _hash(clave);
     const yaGuardado = props.getProperty(claveIdem);
     if (yaGuardado) return { ok: true, id: yaGuardado, repetido: true };
+
+    /* El catálogo se lee acá adentro, no antes: validar el stock fuera del
+       lock dejaría pasar dos pedidos simultáneos por la misma unidad. El
+       nombre de cada producto sale del catálogo y no de lo que mandó el
+       cliente, así la planilla queda consistente con un borrador viejo. */
+    const catalogo = {};
+    accionProductos().productos.forEach(function (prod) { catalogo[prod.id] = prod; });
+
+    const lineas = [];
+    const paraStock = [];
+    let total = 0;
+
+    for (let i = 0; i < items.length; i++) {
+      const cantidad = Math.floor(Number(items[i].cantidad));
+      if (!(cantidad >= 1 && cantidad <= CFG.MAX_CANTIDAD)) {
+        throw _error('Cantidad inválida en el pedido.', 'DATOS_INVALIDOS');
+      }
+      const prod = catalogo[items[i].id];
+      const nombreProducto = prod ? prod.nombre : String(items[i].nombre || '').trim();
+      if (!nombreProducto) throw _error('Hay un producto que ya no está en el catálogo.', 'DATOS_INVALIDOS');
+
+      if (prod && prod.stock !== null && cantidad > prod.stock) {
+        throw _error(prod.stock > 0
+          ? 'De ' + nombreProducto + ' quedan ' + prod.stock + '. Ajustá la cantidad y reintentá.'
+          : 'Ya no queda stock de ' + nombreProducto + '.', 'SIN_STOCK');
+      }
+      lineas.push(nombreProducto + ' x' + cantidad);
+      paraStock.push({ nombre: nombreProducto, cantidad: cantidad });
+      total += cantidad;
+    }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const hoja = _hoja(CFG.HOJA_PEDIDOS);
@@ -541,7 +544,12 @@ function accionPedido(p, sesion) {
 
     if (CFG.MODO_STATUS === 'copiar') _copiarStatus(hoja, encabezados, filaNueva);
 
+    /* Recién con el pedido escrito se toma el stock: si algo falló antes, no
+       quedó mercadería retenida por un pedido que no existe. */
+    _retenerStock(id, paraStock);
+
     props.setProperty(claveIdem, id);
+    CacheService.getScriptCache().remove('catalogo');
     SpreadsheetApp.flush();
     return { ok: true, id: id };
   } finally {
@@ -982,6 +990,60 @@ function _aplicarStock(items, signo) {
   return { aplicado: aplicado, faltantes: faltantes, recortados: recortados, precios: precios };
 }
 
+/*
+ * El stock se descuenta cuando se carga el pedido, no cuando se entrega: así
+ * refleja lo comprometido y dos personas no pueden vender lo mismo.
+ *
+ * Para cada pedido se guarda en las propiedades del script cuánto tiene
+ * retenido. Todo cambio —editar, cancelar, revivir— se resuelve devolviendo lo
+ * retenido y volviendo a tomar lo que corresponda: es más simple y más
+ * difícil de arruinar que llevar la cuenta de las diferencias.
+ */
+function _claveStock(id) { return 'stock_' + String(id).trim(); }
+
+function _retenidoPor(id) {
+  const crudo = PropertiesService.getScriptProperties().getProperty(_claveStock(id));
+  return crudo ? JSON.parse(crudo) : [];
+}
+
+/** Devuelve al catálogo todo lo que el pedido tenía retenido. */
+function _liberarStock(id) {
+  const retenido = _retenidoPor(id);
+  if (retenido.length) _aplicarStock(retenido, +1);
+  PropertiesService.getScriptProperties().deleteProperty(_claveStock(id));
+  return retenido;
+}
+
+/** Deja retenido exactamente lo que dicen los items, sea alta o corrección. */
+function _retenerStock(id, items) {
+  _liberarStock(id);
+  const r = _aplicarStock(items, -1);
+  if (r.aplicado.length) {
+    PropertiesService.getScriptProperties()
+      .setProperty(_claveStock(id), JSON.stringify(r.aplicado));
+  }
+  return r;
+}
+
+/** Precios de venta vigentes, indexados por nombre normalizado. */
+function _indicePrecios() {
+  const hoja = _hoja(CFG.HOJA_PRODUCTOS);
+  const valores = hoja.getDataRange().getValues();
+  const encabezados = valores[0].map(_normalizar);
+  const col = _mapearColumnas(encabezados, CFG.COLS_PRODUCTOS);
+
+  const precios = {};
+  if (col.nombre < 0 || col.precio < 0) return precios;
+
+  for (let i = 1; i < valores.length; i++) {
+    const clave = _normalizar(valores[i][col.nombre]);
+    if (!clave || precios[clave] !== undefined) continue;
+    const p = _numero(valores[i][col.precio]);
+    if (p !== null) precios[clave] = p;
+  }
+  return precios;
+}
+
 /** Suma del pedido a los precios que estaban vigentes en ese momento. */
 function _montoDeItems(items, precios) {
   let monto = 0;
@@ -1038,17 +1100,14 @@ function accionEstadoPedidos(p, sesion) {
 
     const resultados = [];
     const recortados = [];
-    const faltantes = [];
 
     items.forEach(function (item) {
       try {
         const r = _operarPedido(ctx, Math.floor(Number(item.fila)), item.id, operacion);
         resultados.push({ id: item.id, ok: true, status: r.status,
-                          monto: r.monto === undefined ? null : r.monto });
+                          monto: r.monto === undefined ? null : r.monto,
+                          sinPrecio: r.sinPrecio || 0 });
         (r.recortados || []).forEach(function (x) { recortados.push(x); });
-        (r.faltantes || []).forEach(function (x) {
-          if (faltantes.indexOf(x) < 0) faltantes.push(x);
-        });
       } catch (e) {
         resultados.push({ id: item.id, ok: false, error: e.message });
       }
@@ -1060,7 +1119,6 @@ function accionEstadoPedidos(p, sesion) {
       resultados: resultados,
       hechos: resultados.filter(function (r) { return r.ok; }).length,
       recortados: recortados,
-      faltantes: faltantes,
     };
   } finally {
     lock.releaseLock();
@@ -1095,18 +1153,16 @@ function _operarPedido(ctx, fila, id, operacion) {
     if (status === CFG.STATUS_ENTREGADO) throw _error('Ya está entregado.', 'CONFLICTO');
     if (status === CFG.STATUS_CANCELADO) throw _error('Está cancelado.', 'CONFLICTO');
 
-    const r = _aplicarStock(items, -1);
-
-    /* El monto se congela acá: después puede cambiar el precio del producto y
-       lo entregado tiene que seguir valiendo lo que valió. */
+    /* La entrega ya no mueve stock: se descontó al cargar el pedido. Lo único
+       que hace acá es congelar el monto, porque después puede cambiar el
+       precio del producto y lo entregado tiene que seguir valiendo lo mismo. */
     const colMonto = _asegurarColumna(hoja, CFG.COL_MONTO_TITULO, CFG.COLS_PEDIDOS.monto);
-    const m = _montoDeItems(items, r.precios);
+    const m = _montoDeItems(items, _indicePrecios());
     hoja.getRange(fila, colMonto + 1).setValue(m.monto);
 
     hoja.getRange(fila, colStatus + 1).setValue(CFG.STATUS_ENTREGADO);
-    props.setProperty(clave, JSON.stringify({ anterior: status, stock: r.aplicado }));
-    return { ok: true, status: CFG.STATUS_ENTREGADO, monto: m.monto, sinPrecio: m.sinPrecio,
-             faltantes: r.faltantes, recortados: r.recortados };
+    props.setProperty(clave, JSON.stringify({ anterior: status, liberoStock: false }));
+    return { ok: true, status: CFG.STATUS_ENTREGADO, monto: m.monto, sinPrecio: m.sinPrecio };
   }
 
   if (operacion === 'cancelar') {
@@ -1115,9 +1171,11 @@ function _operarPedido(ctx, fila, id, operacion) {
     }
     if (status === CFG.STATUS_CANCELADO) throw _error('Ya está cancelado.', 'CONFLICTO');
 
+    /* Un pedido cancelado deja de comprometer mercadería. */
+    const devuelto = _liberarStock(id);
     hoja.getRange(fila, colStatus + 1).setValue(CFG.STATUS_CANCELADO);
-    props.setProperty(clave, JSON.stringify({ anterior: status, stock: [] }));
-    return { ok: true, status: CFG.STATUS_CANCELADO };
+    props.setProperty(clave, JSON.stringify({ anterior: status, liberoStock: true }));
+    return { ok: true, status: CFG.STATUS_CANCELADO, repuesto: devuelto.length };
   }
 
   if (operacion === 'deshacer') {
@@ -1125,7 +1183,19 @@ function _operarPedido(ctx, fila, id, operacion) {
     if (!crudo) throw _error('No hay nada que deshacer.', 'CONFLICTO');
 
     const previo = JSON.parse(crudo);
-    if (previo.stock && previo.stock.length) _aplicarStock(previo.stock, +1);
+
+    /* Si al cancelar se devolvió la mercadería, revivir el pedido la vuelve a
+       comprometer. Se retoma contra el detalle actual, no contra lo que había
+       al cancelar: el pedido pudo editarse en el medio. */
+    let retomado = 0;
+    let recortados = [];
+    if (previo.liberoStock) {
+      const rr = _retenerStock(id, items);
+      retomado = rr.aplicado.length;
+      /* Entre la cancelación y el revivir, el stock pudo haberse ido en otros
+         pedidos: se toma lo que haya y se informa el faltante. */
+      recortados = rr.recortados;
+    }
 
     /* Deja de estar entregado, así que el monto vuelve a calcularse solo. */
     const colMonto = _buscarColumna(
@@ -1136,7 +1206,7 @@ function _operarPedido(ctx, fila, id, operacion) {
     hoja.getRange(fila, colStatus + 1).setValue(previo.anterior || CFG.STATUS_INICIAL);
     props.deleteProperty(clave);
     return { ok: true, status: previo.anterior || CFG.STATUS_INICIAL, monto: null,
-             repuesto: (previo.stock || []).length };
+             retomado: retomado, recortados: recortados };
   }
 
   throw _error('Operación de pedido desconocida: ' + operacion, 'ACCION_INVALIDA');
@@ -1179,9 +1249,15 @@ function accionEditarPedido(p, sesion) {
 
     hoja.getRange(fila, col.detalle + 1).setValue(detalle);
     if (col.total >= 0) hoja.getRange(fila, col.total + 1).setValue(total);
+
+    /* Cambió lo que el pedido compromete: se devuelve lo que tenía retenido y
+       se vuelve a tomar según el detalle nuevo. */
+    const r = _retenerStock(p.id, items);
+    CacheService.getScriptCache().remove('catalogo');
     SpreadsheetApp.flush();
 
-    return { ok: true, detalle: detalle, total: total, items: items };
+    return { ok: true, detalle: detalle, total: total, items: items,
+             recortados: r.recortados, faltantes: r.faltantes };
   } finally {
     lock.releaseLock();
   }

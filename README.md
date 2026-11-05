@@ -168,10 +168,10 @@ nombre o producto. Sobre cada pedido:
 
 | Acción | Qué hace |
 |---|---|
-| **Entregar** | Descuenta el stock y pasa el pedido a `Entregado` |
+| **Entregar** | Pasa el pedido a `Entregado` y congela su monto |
 | **Editar** | Corrige cantidades y suma productos nuevos; recalcula detalle y total |
-| **Cancelar** | Pasa a `Cancelado` y lo saca de la cola de etiquetas, sin tocar el stock |
-| **Deshacer** | Vuelve al estado anterior; si era una entrega, repone el stock |
+| **Cancelar** | Pasa a `Cancelado`, lo saca de la cola de etiquetas y devuelve el stock |
+| **Deshacer** | Vuelve al estado anterior; si era una cancelación, vuelve a reservar el stock |
 
 El recorrido de un pedido es `Pendiente` → `Impreso` (al generar etiquetas) →
 `Entregado`. Se puede entregar directo desde cualquiera de los dos primeros.
@@ -225,18 +225,7 @@ El lote viaja en una sola llamada y corre bajo un único lock del servidor: que
 uno falle no cancela los demás, y el resultado informa cuántos cambiaron y por
 qué fallaron los otros. El máximo es de 150 pedidos por vez.
 
-**El stock nunca queda negativo.** Si al entregar no alcanza, se descuenta
-hasta cero y la pantalla avisa de qué producto faltaba: quien apretó *Entregar*
-ya despachó la mercadería, así que frenar la operación por un descuadre de
-planilla no arregla nada, pero el descuadre tiene que verse.
-
-**Deshacer repone lo que se descontó, no lo que se pidió.** Si un pedido de 12
-se entregó con 2 en stock, deshacer devuelve 2. Reponer 12 inventaría
-mercadería que nunca existió.
-
-Un pedido entregado o cancelado **no se puede editar**: el stock ya se movió y
-cambiar el detalle lo dejaría sin relación con lo despachado. Primero se
-deshace.
+Un pedido entregado o cancelado **no se puede editar**. Primero se deshace.
 
 ### Catálogo
 
