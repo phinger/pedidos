@@ -176,6 +176,22 @@ nombre o producto. Sobre cada pedido:
 El recorrido de un pedido es `Pendiente` → `Impreso` (al generar etiquetas) →
 `Entregado`. Se puede entregar directo desde cualquiera de los dos primeros.
 
+### El monto
+
+Cada pedido muestra cuánto suma a precio de venta: por cada renglón del
+detalle, la cantidad por el `Precio` del catálogo. Arriba, **Monto a la vista**
+suma los pedidos que deja ver el filtro puesto.
+
+Se calcula en el momento, cruzando el detalle contra el catálogo por nombre; no
+se guarda nada en la planilla. La consecuencia es que **el monto de un pedido
+viejo cambia si después se cambia el precio del producto**. Para que quede
+congelado al momento del pedido habría que guardar el precio en la fila, que es
+otro cambio.
+
+Si algún producto del pedido no tiene precio cargado —o se renombró y ya no
+cruza—, el monto aparece en gris con un *+N sin precio*: suma lo que puede y
+avisa de lo que falta, en vez de mostrar un número que no es.
+
 ### Selección múltiple
 
 Cada pedido tiene su casilla y la barra de arriba selecciona todos los que

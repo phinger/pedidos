@@ -23,6 +23,30 @@ const margenDe  = (costo, venta) =>
 const ventaDe   = (costo, margen) =>
   (costo === null || margen === null || margen >= 1) ? null : costo / (1 - margen);
 
+/* Para cruzar el detalle del pedido —que guarda nombres, no códigos— contra
+   el catálogo. Mismo criterio que usa el servidor al descontar stock. */
+const claveNombre = (n) => String(n || '').trim().toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/**
+ * Cuánto suma un pedido a precio de venta.
+ *
+ * Devuelve también cuántos renglones quedaron sin precio: un producto que se
+ * renombró, o al que todavía no se le cargó precio, haría parecer que el
+ * pedido vale menos de lo que vale. Es preferible marcar el monto como
+ * incompleto que mostrar un número que no es.
+ */
+const calcularMonto = (items, preciosPorNombre) => {
+  let monto = 0;
+  let sinPrecio = 0;
+  (items || []).forEach((item) => {
+    const precio = preciosPorNombre.get(claveNombre(item.nombre));
+    if (precio === null || precio === undefined) sinPrecio++;
+    else monto += precio * item.cantidad;
+  });
+  return { monto, sinPrecio, completo: sinPrecio === 0 };
+};
+
 const $  = (sel) => document.querySelector(sel);
 
 const estado = {
@@ -378,6 +402,16 @@ function crearFila(p) {
 
 /* ── Pedidos ─────────────────────────────────────────────────────────── */
 
+/* Índice nombre → precio de venta, para no recorrer el catálogo entero por
+   cada renglón de cada pedido. */
+function indicePrecios() {
+  const mapa = new Map();
+  estado.productos.forEach((p) => {
+    if (p.precio !== null && p.precio !== undefined) mapa.set(claveNombre(p.nombre), p.precio);
+  });
+  return mapa;
+}
+
 function pedidosVisibles() {
   const q = estado.busqueda.trim().toLowerCase();
   return estado.pedidos.filter((p) => {
@@ -391,11 +425,12 @@ function renderPedidos() {
   renderChipsEstado();
 
   const lista = pedidosVisibles();
+  const precios = indicePrecios();
   const cont = $('#lista-pedidos');
   cont.innerHTML = '';
 
   const frag = document.createDocumentFragment();
-  lista.forEach((p) => frag.appendChild(crearTarjetaPedido(p)));
+  lista.forEach((p) => frag.appendChild(crearTarjetaPedido(p, precios)));
   cont.appendChild(frag);
 
   $('#sin-pedidos').hidden = lista.length > 0;
@@ -493,6 +528,23 @@ function renderResumenPedidos() {
   const hoy = String(d.getDate()).padStart(2, '0') + '/' +
               String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
 
+  /* El monto acompaña al filtro puesto: si estás mirando los pendientes,
+     el número de arriba es el de los pendientes. */
+  const precios = indicePrecios();
+  const visibles = pedidosVisibles();
+  let suma = 0;
+  let incompletos = 0;
+  visibles.forEach((p) => {
+    const r = calcularMonto(p.items, precios);
+    suma += r.monto;
+    if (!r.completo) incompletos++;
+  });
+  $('#p-monto').textContent = (suma ? dinero.format(suma) : '—') +
+    (incompletos ? ' *' : '');
+  $('#p-monto').title = incompletos
+    ? incompletos + ' pedido(s) tienen productos sin precio cargado'
+    : '';
+
   $('#p-total').textContent = estado.pedidos.length;
   $('#p-pendientes').textContent = cuenta(estado.estados.inicial);
   $('#p-impresos').textContent = cuenta(estado.estados.impreso);
@@ -502,7 +554,7 @@ function renderResumenPedidos() {
   renderContadorPedidos();
 }
 
-function crearTarjetaPedido(p) {
+function crearTarjetaPedido(p, precios) {
   const tarjeta = document.createElement('article');
   tarjeta.className = 'pedido';
   tarjeta.dataset.status = p.status;
@@ -548,6 +600,22 @@ function crearTarjetaPedido(p) {
 
   const derecha = document.createElement('div');
   derecha.className = 'pedido-derecha';
+
+  const { monto, sinPrecio, completo } = calcularMonto(p.items, precios);
+  const importe = document.createElement('div');
+  importe.className = 'pedido-monto';
+  importe.dataset.incompleto = String(!completo);
+  importe.textContent = completo || monto > 0 ? dinero.format(monto) : '—';
+  if (!completo) {
+    const falta = document.createElement('span');
+    falta.className = 'monto-falta';
+    falta.textContent = '+' + sinPrecio + ' sin precio';
+    falta.title = sinPrecio === 1
+      ? 'Un producto del pedido no tiene precio cargado'
+      : sinPrecio + ' productos del pedido no tienen precio cargado';
+    importe.appendChild(falta);
+  }
+  derecha.appendChild(importe);
 
   const marca = document.createElement('span');
   marca.className = 'marca-estado';

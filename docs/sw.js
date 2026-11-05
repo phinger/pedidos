@@ -1,6 +1,6 @@
 /* Service worker: deja la app abriendo instantánea.
    Al publicar cambios, subir VERSION para invalidar el caché. */
-const VERSION = 'pedidos-v21';
+const VERSION = 'pedidos-v22';
 
 /* Los assets van versionados desde index.html: es lo único que le gana a un
    service worker viejo que quedó sirviendo caché-primero, porque esa URL no
@@ -9,9 +9,9 @@ const VERSION = 'pedidos-v21';
 const RECURSOS = [
   './',
   './index.html',
-  './styles.css?v=21',
-  './app.js?v=21',
-  './config.js?v=21',
+  './styles.css?v=22',
+  './app.js?v=22',
+  './config.js?v=22',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

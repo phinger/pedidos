@@ -1361,7 +1361,8 @@ const fuenteAdmin = fs.readFileSync(path.join(RAIZ, 'docs', 'admin', 'admin.js')
 const bloqueMargen = fuenteAdmin.slice(
   fuenteAdmin.indexOf('const margenDe'),
   fuenteAdmin.indexOf('const $  ='));
-const { margenDe, ventaDe } = new Function(bloqueMargen + '; return { margenDe, ventaDe };')();
+const { margenDe, ventaDe, calcularMonto, claveNombre } =
+  new Function(bloqueMargen + '; return { margenDe, ventaDe, calcularMonto, claveNombre };')();
 
 const redondear = (n, d = 6) => (n === null ? null : Number(n.toFixed(d)));
 
@@ -1396,6 +1397,49 @@ probar('los casos imposibles devuelven null en vez de infinito', () => {
 probar('un margen negativo es válido: se vende a pérdida', () => {
   igual(redondear(margenDe(200, 100)), -1, 'costo 200 y venta 100 → -100 %');
   igual(redondear(ventaDe(200, -1)), 100, 'y vuelve');
+});
+
+console.log('\nMonto del pedido');
+
+/* Se arma con claveNombre, igual que indicePrecios() en la página: probar
+   contra un mapa con claves crudas no probaría el cruce real. */
+const indiceDePrueba = (pares) =>
+  new Map(pares.map(([nombre, precio]) => [claveNombre(nombre), precio]));
+
+const precios = indiceDePrueba([
+  ['Almendras', 1800],
+  ['Nuez pecán', 3000],
+  ['Pan integral', 900],
+]);
+
+probar('suma cantidad por precio de venta', () => {
+  const r = calcularMonto([
+    { nombre: 'Almendras', cantidad: 3 },
+    { nombre: 'Pan integral', cantidad: 2 },
+  ], precios);
+  igual([r.monto, r.completo], [1800 * 3 + 900 * 2, true]);
+});
+
+probar('ignora mayúsculas y acentos al cruzar con el catálogo', () => {
+  igual(calcularMonto([{ nombre: '  NUEZ PECAN ', cantidad: 2 }], precios).monto, 6000);
+});
+
+probar('marca el pedido como incompleto si falta un precio', () => {
+  const r = calcularMonto([
+    { nombre: 'Almendras', cantidad: 1 },
+    { nombre: 'Producto que ya no existe', cantidad: 5 },
+  ], precios);
+  igual([r.monto, r.sinPrecio, r.completo], [1800, 1, false],
+    'suma lo que puede y avisa de lo que falta');
+});
+
+probar('un precio en cero es un precio, no un faltante', () => {
+  const r = calcularMonto([{ nombre: 'Muestra', cantidad: 4 }], indiceDePrueba([['Muestra', 0]]));
+  igual([r.monto, r.completo], [0, true]);
+});
+
+probar('un pedido vacío vale cero y está completo', () => {
+  igual(calcularMonto([], precios), { monto: 0, sinPrecio: 0, completo: true });
 });
 
 console.log('\n' + (fallas === 0
