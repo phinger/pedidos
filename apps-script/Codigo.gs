@@ -17,7 +17,7 @@
 /* Se sube a mano con cada cambio que haya que publicar. doGet lo devuelve, así
    que abriendo la URL /exec en el navegador se ve qué versión está realmente
    publicada — que no es lo mismo que la que muestra el editor. */
-const VERSION_API = 11;
+const VERSION_API = 12;
 
 const CFG = {
   /* ── Solapas ──────────────────────────────────────────────────────── */
@@ -122,6 +122,7 @@ function doPost(e) {
     if (accion === 'estadoPedido')    return _salida(accionEstadoPedido(cuerpo, sesion));
     if (accion === 'estadoPedidos')   return _salida(accionEstadoPedidos(cuerpo, sesion));
     if (accion === 'editarPedido')    return _salida(accionEditarPedido(cuerpo, sesion));
+    if (accion === 'reconciliar')     return _salida(accionReconciliar(cuerpo, sesion));
     if (accion === 'estructura') return _salida(accionEstructura());
 
     /* Casi siempre significa que el código está guardado pero no publicado:
@@ -1293,6 +1294,50 @@ function _pedidosSinReserva() {
     });
   }
   return pendientes;
+}
+
+/**
+ * Lo mismo que revisarStockPendiente() y reconciliarStock(), para la pantalla
+ * de administración: con `simular` informa sin tocar nada, y sin él aplica.
+ */
+function accionReconciliar(p, sesion) {
+  const simular = p.simular === true;
+  const pendientes = _pedidosSinReserva();
+
+  const porProducto = {};
+  pendientes.forEach(function (pedido) {
+    pedido.items.forEach(function (i) {
+      porProducto[i.nombre] = (porProducto[i.nombre] || 0) + i.cantidad;
+    });
+  });
+
+  const resumen = Object.keys(porProducto).sort().map(function (nombre) {
+    return { nombre: nombre, cantidad: porProducto[nombre] };
+  });
+
+  if (simular || !pendientes.length) {
+    return { ok: true, simulado: true, cantidad: pendientes.length,
+             ids: pendientes.map(function (x) { return x.id; }), productos: resumen };
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) throw _error('El servidor está ocupado. Probá de nuevo.', 'OCUPADO');
+  try {
+    const recortados = [];
+    pendientes.forEach(function (pedido) {
+      _retenerStock(pedido.id, pedido.items).recortados.forEach(function (x) {
+        recortados.push(x.nombre);
+      });
+    });
+    CacheService.getScriptCache().remove('catalogo');
+    SpreadsheetApp.flush();
+
+    return { ok: true, simulado: false, cantidad: pendientes.length,
+             ids: pendientes.map(function (x) { return x.id; }),
+             productos: resumen, recortados: recortados };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**

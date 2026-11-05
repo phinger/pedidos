@@ -62,6 +62,7 @@ const estado = {
   orden: { campo: 'nombre', asc: true },
 
   pedidos: [],
+  hayQuePonerAlDia: false,
   estados: { inicial: 'Pendiente', impreso: 'Impreso', entregado: 'Entregado', cancelado: 'Cancelado' },
   filtroEstado: '__todos__',
   seleccion: new Set(),      // ids de pedidos tildados
@@ -165,6 +166,12 @@ async function cargar() {
     estado.columnas = catalogo.columnas || {};
     estado.pedidos = pedidos.pedidos;
     if (pedidos.estados) estado.estados = pedidos.estados;
+
+    /* El botón de puesta al día solo aparece si de verdad hay algo pendiente:
+       es una operación de transición, no parte de la rutina. */
+    try {
+      estado.hayQuePonerAlDia = (await api('reconciliar', { simular: true })).cantidad > 0;
+    } catch { estado.hayQuePonerAlDia = false; }
 
     $('#cargando').hidden = true;
     $('#app').hidden = false;
@@ -537,6 +544,7 @@ function renderSeleccion() {
     : 'Seleccionar todo';
 
   $('#acciones-lote').hidden = elegidos.length === 0;
+  $('#btn-reconciliar').hidden = elegidos.length > 0 || !estado.hayQuePonerAlDia;
 
   /* Cada botón dice sobre cuántos va a actuar de verdad: si hay diez
      seleccionados pero solo tres se pueden entregar, mejor saberlo antes. */
@@ -778,6 +786,50 @@ async function operarLote(operacion) {
     if (e.codigo === 'SIN_AUTORIZACION') return;
     aviso(e.message, 'error');
     renderSeleccion();
+  }
+}
+
+/**
+ * Pone al día los pedidos cargados antes de que el stock se descontara en la
+ * carga: existen, van a salir del depósito, y el catálogo los sigue contando
+ * como disponibles.
+ *
+ * Primero simula y muestra exactamente qué se va a descontar: es una
+ * operación de una sola vez sobre números reales, y conviene verla antes.
+ */
+async function reconciliarStock() {
+  const boton = $('#btn-reconciliar');
+  boton.disabled = true;
+  try {
+    const previo = await api('reconciliar', { simular: true });
+    if (!previo.cantidad) {
+      aviso('No hay nada que poner al día: todos los pedidos vivos ya reservan stock');
+      return;
+    }
+
+    const detalle = previo.productos
+      .map((x) => '  · ' + x.nombre + '  −' + x.cantidad)
+      .join('\n');
+    const confirmado = confirm(
+      previo.cantidad + ' pedido(s) sin stock reservado: ' + previo.ids.join(', ') +
+      '\n\nSe va a descontar del catálogo:\n' + detalle +
+      '\n\nSe puede correr más de una vez sin descontar dos veces. ¿Aplicar?');
+    if (!confirmado) return;
+
+    const r = await api('reconciliar', {});
+    aviso(r.recortados && r.recortados.length
+      ? r.cantidad + ' pedido(s) al día · no alcanzaba el stock de ' +
+        [...new Set(r.recortados)].join(', ')
+      : r.cantidad + ' pedido(s) pasaron a reservar stock',
+      r.recortados && r.recortados.length ? 'error' : '');
+
+    await recargarCatalogo();
+    render();
+  } catch (e) {
+    if (e.codigo === 'SIN_AUTORIZACION') return;
+    aviso(e.message, 'error');
+  } finally {
+    boton.disabled = false;
   }
 }
 
@@ -1156,6 +1208,7 @@ function conectarEventos() {
 
   rotularModo();
   $('#btn-modo').addEventListener('click', cambiarModo);
+  $('#btn-reconciliar').addEventListener('click', reconciliarStock);
 
   $('#btn-recargar').addEventListener('click', () => {
     cargar();

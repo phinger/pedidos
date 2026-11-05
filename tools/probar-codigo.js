@@ -1313,6 +1313,32 @@ probar('después de reconciliar, cancelar devuelve lo reservado', () => {
   igual(stockDe(hojas, 'Almendras'), 10, 'devuelve los 3 del pedido reconciliado');
 });
 
+probar('la simulación informa sin tocar el stock', () => {
+  const { ctx, hojas, token } = conPedidosHeredados();
+  const r = llamar(ctx, { accion: 'reconciliar', token, simular: true });
+
+  igual([r.simulado, r.cantidad], [true, 2], 'los dos vivos');
+  igual(r.ids, ['P-0001', 'P-0002']);
+  igual(r.productos, [{ nombre: 'Almendras', cantidad: 5 }], '3 + 2');
+  igual(stockDe(hojas, 'Almendras'), 12, 'simular no escribe');
+});
+
+probar('aplicar desde la pantalla descuenta lo mismo que simuló', () => {
+  const { ctx, hojas, token } = conPedidosHeredados();
+  const r = llamar(ctx, { accion: 'reconciliar', token });
+  igual([r.simulado, r.cantidad], [false, 2]);
+  igual(stockDe(hojas, 'Almendras'), 7);
+
+  igual(llamar(ctx, { accion: 'reconciliar', token, simular: true }).cantidad, 0,
+    'después ya no queda nada que poner al día');
+});
+
+probar('reconciliar sin sesión se rechaza', () => {
+  const { ctx } = conPedidosHeredados();
+  igual(llamar(ctx, { accion: 'reconciliar', token: '', simular: true }).codigo,
+    'SIN_AUTORIZACION');
+});
+
 probar('sin nada que reconciliar, no hace nada', () => {
   const { ctx, hojas } = entornoCatalogo();
   login(ctx);
