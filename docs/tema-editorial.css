@@ -1,0 +1,318 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Tema editorial — papel, tinta y bordó.
+   Todo cuelga de :root[data-tema="editorial"]: con el tema apagado este
+   archivo no pinta una sola regla, así que volver al diseño anterior es
+   cambiar una línea en config.js, no revertir código.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root[data-tema="editorial"] {
+  --fondo:        #f7f4ee;
+  --superficie:   #fffdf8;
+  --superficie-2: #efe9dd;
+  --texto:        #1a1714;
+  --tenue:        #655d53;
+  --borde:        #ddd6c9;
+  --borde-firme:  #c9bfae;
+  --acento:       #7a2430;
+  --acento-texto: #f7f4ee;
+  --acento-suave: #efe9dd;
+  --peligro:      #8a2a22;
+  --sombra:       none;
+  --sombra-alta:  0 -8px 32px rgba(26,23,20,.14);
+
+  --serif: Fraunces, Georgia, 'Times New Roman', serif;
+  --sans:  'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mono:  'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-tema="editorial"] {
+    --fondo:        #15120f;
+    --superficie:   #1d1916;
+    --superficie-2: #272019;
+    --texto:        #f2ece1;
+    --tenue:        #a2978a;
+    --borde:        #302a23;
+    --borde-firme:  #453c32;
+    --acento:       #d4857c;
+    --acento-texto: #15120f;
+    --acento-suave: #2a1f1c;
+    --peligro:      #e08b80;
+  }
+}
+
+:root[data-tema="editorial"] body { font-family: var(--sans); }
+
+/* ── Cabecera: portada de catálogo ───────────────────────────────────── */
+
+:root[data-tema="editorial"] .cabecera {
+  position: relative;
+  padding: calc(14px + var(--seg-top)) 20px 0;
+  background: var(--fondo);
+  border-bottom: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* La marca y su regla abren la pantalla, como el encabezado de una página. */
+:root[data-tema="editorial"] .marca-fila {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--texto);
+  padding-bottom: 7px;
+}
+:root[data-tema="editorial"] .marca-fila span {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--acento);
+}
+
+/* El menú sube a la línea de la marca sin duplicar el botón en el markup. */
+:root[data-tema="editorial"] .btn-menu {
+  position: absolute;
+  top: calc(6px + var(--seg-top));
+  right: 16px;
+  width: 36px;
+  height: 36px;
+}
+
+:root[data-tema="editorial"] .cabecera-fila {
+  align-items: flex-end;
+  padding: 14px 0 12px;
+}
+
+:root[data-tema="editorial"] .campo-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: .16em;
+  margin-bottom: 3px;
+}
+
+:root[data-tema="editorial"] .campo-nombre input {
+  font-family: var(--serif);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1.08;
+}
+
+/* Contador de ítems: en el encabezado se ve sin bajar a la barra. */
+:root[data-tema="editorial"] .cuenta-cabecera {
+  display: block;
+  flex: none;
+  text-align: right;
+  padding-bottom: 2px;
+}
+:root[data-tema="editorial"] .cuenta-cabecera b {
+  display: block;
+  font-family: var(--serif);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+:root[data-tema="editorial"] .cuenta-cabecera span {
+  display: block;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--tenue);
+  margin-top: 2px;
+}
+
+:root[data-tema="editorial"] .buscador {
+  margin-top: 0;
+  padding: 0 0 9px;
+  height: auto;
+  background: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--borde);
+}
+:root[data-tema="editorial"] .buscador input { font-size: 14px; }
+
+:root[data-tema="editorial"] .chips { margin-top: 12px; padding-bottom: 4px; }
+:root[data-tema="editorial"] .chip {
+  height: 30px;
+  border-radius: 3px;
+  border-color: var(--borde-firme);
+  background: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+:root[data-tema="editorial"] .chip[aria-selected="true"] {
+  background: var(--texto);
+  border-color: var(--texto);
+  color: var(--fondo);
+}
+
+/* ── El listado como un índice ───────────────────────────────────────── */
+
+:root[data-tema="editorial"] .lista { padding: 0 20px 12px; }
+
+:root[data-tema="editorial"] .grupo-titulo {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0 0 8px;
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--acento);
+  background: var(--fondo);
+}
+/* La regla que lleva el ojo del nombre de la categoría hasta su cuenta. */
+:root[data-tema="editorial"] .grupo-titulo::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--borde);
+}
+:root[data-tema="editorial"] .grupo-cuenta {
+  display: block;
+  order: 3;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--tenue);
+}
+
+:root[data-tema="editorial"] .item {
+  gap: 12px;
+  padding: 11px 0;
+  margin-bottom: 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--borde);
+  border-radius: 0;
+  box-shadow: none;
+  contain-intrinsic-size: auto 66px;
+}
+:root[data-tema="editorial"] .item[data-elegido="true"] {
+  background: var(--superficie-2);
+  border-color: var(--borde);
+  padding-inline: 12px;
+  margin-inline: -12px;
+}
+
+:root[data-tema="editorial"] .item-nombre { font-size: 15px; font-weight: 500; line-height: 1.3; }
+:root[data-tema="editorial"] .item[data-elegido="true"] .item-nombre { font-weight: 600; }
+:root[data-tema="editorial"] .item-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .04em;
+  margin-top: 3px;
+}
+:root[data-tema="editorial"] .item[data-agotado="true"] .item-nombre {
+  color: var(--tenue);
+  text-decoration: line-through;
+}
+
+:root[data-tema="editorial"] .stepper {
+  gap: 6px;
+  padding: 0;
+  background: none;
+}
+:root[data-tema="editorial"] .item[data-elegido="true"] .stepper { background: none; }
+
+:root[data-tema="editorial"] .stepper button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--borde-firme);
+  border-radius: 50%;
+  font-size: 18px;
+  color: var(--texto);
+}
+:root[data-tema="editorial"] .stepper .btn-menos { color: var(--tenue); }
+:root[data-tema="editorial"] .stepper .btn-mas {
+  background: none;
+  color: var(--texto);
+}
+:root[data-tema="editorial"] .item[data-elegido="true"] .stepper .btn-mas {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--acento-texto);
+}
+:root[data-tema="editorial"] .stepper button:disabled {
+  background: none;
+  border-color: var(--borde);
+  opacity: .5;
+}
+
+:root[data-tema="editorial"] .cantidad {
+  min-width: 26px;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--acento);
+}
+
+/* Agotado: un sello en vez de un botón apagado. */
+.sello-agotado { display: none; }
+:root[data-tema="editorial"] .item[data-agotado="true"] .stepper { display: none; }
+:root[data-tema="editorial"] .item[data-agotado="true"] .sello-agotado {
+  display: block;
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--tenue);
+  border: 1px solid var(--borde);
+  border-radius: 3px;
+  padding: 4px 7px;
+}
+
+/* ── Colofón ─────────────────────────────────────────────────────────── */
+
+:root[data-tema="editorial"] .barra-inferior {
+  padding: 14px 20px calc(14px + var(--seg-bottom));
+  background: var(--fondo);
+  border-top: 1px solid var(--texto);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-tema="editorial"] .btn-finalizar {
+  min-height: 54px;
+  border-radius: 4px;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+:root[data-tema="editorial"] .badge {
+  background: none;
+  font-family: var(--mono);
+  font-size: 13px;
+  opacity: .75;
+}
+:root[data-tema="editorial"] .barra-motivo { font-family: var(--mono); font-size: 11px; }
+
+/* ── Hojas, diálogos y pantallas sueltas ─────────────────────────────── */
+
+:root[data-tema="editorial"] .hoja { border-radius: 6px 6px 0 0; }
+:root[data-tema="editorial"] .hoja-titulo,
+:root[data-tema="editorial"] .titulo,
+:root[data-tema="editorial"] .titulo-hero {
+  font-family: var(--serif);
+  font-weight: 700;
+}
+:root[data-tema="editorial"] .btn { border-radius: 4px; }
+:root[data-tema="editorial"] .btn-primario { font-family: var(--serif); font-weight: 700; }
+:root[data-tema="editorial"] .resumen-cant { font-family: var(--serif); font-size: 18px; }
+:root[data-tema="editorial"] .pedido-id,
+:root[data-tema="editorial"] .codigo-display,
+:root[data-tema="editorial"] .input-codigo { font-family: var(--mono); }
+:root[data-tema="editorial"] .menu-opcion { font-family: var(--sans); }
+:root[data-tema="editorial"] .aviso { border-radius: 4px; font-family: var(--sans); }
+:root[data-tema="editorial"] .marca { border-radius: 8%; }

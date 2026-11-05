@@ -1,0 +1,223 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Tema editorial — administración.
+   Mismas reglas que en el teléfono: todo cuelga de
+   :root[data-tema="editorial"] y con el tema apagado no pinta nada.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root[data-tema="editorial"] {
+  --fondo:        #f7f4ee;
+  --superficie:   #fffdf8;
+  --superficie-2: #efe9dd;
+  --texto:        #1a1714;
+  --tenue:        #655d53;
+  --borde:        #ddd6c9;
+  --borde-firme:  #c9bfae;
+  --acento:       #7a2430;
+  --ok:           #1f6b4e;
+  --peligro:      #8a2a22;
+  --alerta:       #8a5a12;
+  --azul:         #1f4e79;
+  --sombra:       none;
+
+  --serif: Fraunces, Georgia, 'Times New Roman', serif;
+  --sans:  'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mono:  'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-tema="editorial"] {
+    --fondo:        #15120f;
+    --superficie:   #1d1916;
+    --superficie-2: #272019;
+    --texto:        #f2ece1;
+    --tenue:        #a2978a;
+    --borde:        #302a23;
+    --borde-firme:  #453c32;
+    --acento:       #d4857c;
+    --ok:           #5cc08f;
+    --peligro:      #e08b80;
+    --alerta:       #e0a84e;
+    --azul:         #6aa6e0;
+  }
+}
+
+:root[data-tema="editorial"] body { font-family: var(--sans); }
+
+/* ── Masthead ────────────────────────────────────────────────────────── */
+
+:root[data-tema="editorial"] .cabecera {
+  padding: 28px 32px 0;
+  border-bottom: 0;
+}
+:root[data-tema="editorial"] .cabecera-fila {
+  align-items: flex-end;
+  border-bottom: 1px solid var(--texto);
+  padding-bottom: 12px;
+}
+
+:root[data-tema="editorial"] .solapas { gap: 22px; margin: 0; }
+:root[data-tema="editorial"] .solapa {
+  padding: 0 0 2px;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  font-family: var(--serif);
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--tenue);
+}
+:root[data-tema="editorial"] .solapa[aria-selected="true"] {
+  color: var(--texto);
+  border-bottom-color: var(--acento);
+}
+:root[data-tema="editorial"] .contador {
+  background: var(--acento);
+  color: var(--fondo);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+:root[data-tema="editorial"] .usuario { font-family: var(--mono); font-size: 11px; }
+
+:root[data-tema="editorial"] .buscador input,
+:root[data-tema="editorial"] .btn {
+  border-radius: 4px;
+  border-color: var(--borde-firme);
+}
+:root[data-tema="editorial"] .buscador input { background: var(--superficie); }
+
+/* ── Cifras: los números en serif se leen de un vistazo ──────────────── */
+
+:root[data-tema="editorial"] .resumen { gap: 40px; padding: 20px 0 22px; }
+:root[data-tema="editorial"] .resumen dt {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: .14em;
+}
+:root[data-tema="editorial"] .resumen dd {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+/* ── Filtros ─────────────────────────────────────────────────────────── */
+
+:root[data-tema="editorial"] .chips {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--borde);
+}
+:root[data-tema="editorial"] .chip {
+  border-color: var(--borde-firme);
+  background: none;
+  font-size: 13px;
+}
+:root[data-tema="editorial"] .chip[aria-selected="true"] {
+  background: var(--texto);
+  border-color: var(--texto);
+  color: var(--fondo);
+}
+:root[data-tema="editorial"] .chip .cuenta { font-family: var(--mono); font-size: 11px; }
+
+:root[data-tema="editorial"] .barra-seleccion {
+  padding: 13px 2px;
+  border-bottom: 1px solid var(--borde);
+}
+
+/* ── Tabla de productos ──────────────────────────────────────────────── */
+
+:root[data-tema="editorial"] thead th {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: .14em;
+  border-bottom-color: var(--texto);
+}
+:root[data-tema="editorial"] tbody tr:hover td { background: var(--superficie); }
+:root[data-tema="editorial"] tbody input[type="text"],
+:root[data-tema="editorial"] tbody input[type="number"],
+:root[data-tema="editorial"] tfoot input { border-radius: 4px; }
+:root[data-tema="editorial"] tbody input[type="number"] { font-family: var(--mono); }
+:root[data-tema="editorial"] .col-codigo input { font-family: var(--mono); font-size: 13px; }
+
+/* ── Pedidos: filas regladas, sin tarjeta ────────────────────────────── */
+
+:root[data-tema="editorial"] .lista-pedidos { gap: 0; padding-top: 0; }
+
+:root[data-tema="editorial"] .pedido {
+  grid-template-columns: auto 74px 104px 1fr auto;
+  gap: 18px;
+  padding: 15px 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--borde);
+  border-radius: 0;
+}
+:root[data-tema="editorial"] .pedido[data-seleccionado="true"] {
+  background: var(--superficie-2);
+  padding-inline: 12px;
+  margin-inline: -12px;
+}
+
+:root[data-tema="editorial"] .pedido-id { font-family: var(--mono); font-size: 13px; }
+:root[data-tema="editorial"] .pedido-cuando { font-family: var(--mono); font-size: 12px; }
+:root[data-tema="editorial"] .pedido-mail { font-family: var(--mono); font-size: 11px; }
+
+:root[data-tema="editorial"] .pedido-monto {
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 700;
+}
+:root[data-tema="editorial"] .monto-falta { font-family: var(--mono); font-size: 10px; }
+
+:root[data-tema="editorial"] .marca-estado {
+  border-radius: 999px;
+  background: none;
+  border: 1px solid var(--borde-firme);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--tenue);
+}
+:root[data-tema="editorial"] .marca-estado[data-status="Pendiente"] {
+  border-color: var(--acento);
+  color: var(--acento);
+}
+:root[data-tema="editorial"] .marca-estado[data-status="Impreso"] {
+  border-color: var(--texto);
+  color: var(--texto);
+}
+:root[data-tema="editorial"] .marca-estado[data-status="Entregado"] {
+  border-color: var(--azul);
+  color: var(--azul);
+}
+
+:root[data-tema="editorial"] .pedido-acciones .btn { border-radius: 4px; }
+:root[data-tema="editorial"] .btn-entregar {
+  background: var(--azul);
+  border-color: var(--azul);
+  color: #ffffff;
+}
+:root[data-tema="editorial"] .btn-primario {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--fondo);
+  font-family: var(--serif);
+  font-weight: 700;
+}
+
+/* ── Diálogo de edición ──────────────────────────────────────────────── */
+
+:root[data-tema="editorial"] .dialogo { border-radius: 6px; }
+:root[data-tema="editorial"] .dialogo-cabecera h2 { font-family: var(--serif); font-size: 20px; }
+:root[data-tema="editorial"] .editar-total strong { font-family: var(--serif); font-size: 19px; }
+:root[data-tema="editorial"] .agregar-item input,
+:root[data-tema="editorial"] .item-editable input { border-radius: 4px; }
+:root[data-tema="editorial"] .item-editable input { font-family: var(--mono); }
+
+:root[data-tema="editorial"] .aviso { border-radius: 4px; }
+:root[data-tema="editorial"] .pie { border-top-color: var(--borde); }
+:root[data-tema="editorial"] .diagnostico { border-radius: 4px; }

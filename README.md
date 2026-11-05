@@ -366,6 +366,32 @@ app. Es un trámite de una sola vez.
 
 ---
 
+## El diseño, y cómo volver atrás
+
+La interfaz tiene dos temas. El **editorial** —papel, tinta y bordó, con
+Fraunces para los nombres y las cifras e IBM Plex para la interfaz— es el que
+está puesto. El **clásico** es el diseño anterior.
+
+Todo el tema vive en `docs/tema-editorial.css` y `docs/admin/tema-editorial.css`,
+colgando entero de `:root[data-tema="editorial"]`. Con el tema apagado esos
+archivos no pintan una sola regla, así que el diseño anterior no quedó
+remendado: sigue intacto debajo.
+
+Tres formas de volver atrás, de la más liviana a la más definitiva:
+
+| Alcance | Cómo |
+|---|---|
+| Un dispositivo | En la app, **⋮ → Diseño clásico**. Queda guardado en ese teléfono |
+| Una visita | Agregar `?tema=clasico` a la URL |
+| Todos | `tema: 'clasico'` en `docs/config.js` y publicar |
+
+Y si hubiera que deshacer el cambio entero, el commit anterior está etiquetado:
+`git diff diseno-clasico` muestra exactamente qué se tocó, y
+`git revert` sobre esos commits lo deshace.
+
+Las fuentes vienen de Google Fonts. Sin conexión caen a Georgia y a la
+tipografía del sistema: cambia el aire, no la usabilidad.
+
 ## Desarrollo
 
 ```bash

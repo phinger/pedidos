@@ -19,6 +19,7 @@ const LS = {
   verifier:  'pedidos.pkce_verifier',
   estadoOAuth: 'pedidos.oauth_state',
   destino:   'pedidos.destino',
+  tema:      'pedidos.tema',
 };
 
 const CATALOGO_FRESCO_MS = 5 * 60 * 1000;   // pasado esto, refresca en segundo plano
@@ -437,13 +438,26 @@ function renderLista() {
   const agrupar = estado.categoria === TODAS && !estado.busqueda.trim();
   let categoriaActual = null;
 
+  /* Cuántos productos tiene cada categoría, para el número al costado del
+     título. Se calcula una vez por render y no por fila. */
+  const porCategoria = new Map();
+  if (agrupar) {
+    for (const p of visibles) {
+      porCategoria.set(p.categoria, (porCategoria.get(p.categoria) || 0) + 1);
+    }
+  }
+
   const frag = document.createDocumentFragment();
   for (const p of visibles) {
     if (agrupar && p.categoria && p.categoria !== categoriaActual) {
       categoriaActual = p.categoria;
       const h = document.createElement('h2');
       h.className = 'grupo-titulo';
-      h.textContent = categoriaActual;
+      h.append(categoriaActual);
+      const cuenta = document.createElement('span');
+      cuenta.className = 'grupo-cuenta';
+      cuenta.textContent = porCategoria.get(categoriaActual);
+      h.appendChild(cuenta);
       frag.appendChild(h);
     }
     frag.appendChild(crearFila(p));
@@ -479,6 +493,13 @@ function crearFila(p) {
     info.appendChild(meta);
   }
 
+  /* Sello de agotado: el tema editorial lo muestra en lugar del stepper.
+     Va en el markup y no como contenido de CSS para que lo lea un lector
+     de pantalla. */
+  const sello = document.createElement('span');
+  sello.className = 'sello-agotado';
+  sello.textContent = 'Agotado';
+
   const stepper = document.createElement('div');
   stepper.className = 'stepper';
   stepper.dataset.cero = String(cantidad === 0);
@@ -504,7 +525,7 @@ function crearFila(p) {
   mas.onclick = () => cambiarCantidad(p.id, +1);
 
   stepper.append(menos, cantidadEl, mas);
-  fila.append(info, stepper);
+  fila.append(info, sello, stepper);
 
   filas.set(p.id, { fila, cantidadEl, stepper, mas, producto: p });
   return fila;
@@ -563,6 +584,11 @@ function actualizarBarra() {
   const badge = $('#finalizar-badge');
   badge.hidden = unidades === 0;
   badge.textContent = String(unidades);
+
+  /* El tema editorial muestra la cuenta arriba; en el clásico está oculta
+     por CSS y da igual mantenerla al día. */
+  $('#cuenta-cabecera').hidden = unidades === 0;
+  $('#cuenta-numero').textContent = String(unidades);
 
   const motivo = $('#barra-motivo');
   if (listo) {
@@ -752,9 +778,32 @@ async function deshacerEtiquetas() {
   }
 }
 
+/* ── Tema ────────────────────────────────────────────────────────────── */
+
+/* El diseño nuevo se puede apagar por dispositivo sin tocar el código ni
+   esperar una publicación: si molesta en medio de una jornada, se vuelve al
+   anterior desde el menú. */
+const temaActual = () => document.documentElement.dataset.tema || 'editorial';
+
+function rotularTema() {
+  $('#tema-etiqueta').textContent = temaActual() === 'editorial'
+    ? 'Diseño clásico'
+    : 'Diseño editorial';
+}
+
+function cambiarTema() {
+  const nuevo = temaActual() === 'editorial' ? 'clasico' : 'editorial';
+  document.documentElement.dataset.tema = nuevo;
+  try { localStorage.setItem(LS.tema, nuevo); } catch { /* sin almacenamiento */ }
+  rotularTema();
+  cerrarHojas();
+  aviso(nuevo === 'editorial' ? 'Diseño editorial' : 'Diseño clásico');
+}
+
 /* ── Eventos ─────────────────────────────────────────────────────────── */
 
 function conectarEventos() {
+  rotularTema();
   $('#btn-login').onclick = iniciarLogin;
   $('#btn-demo').onclick = entrarEnDemo;
   $('#btn-ir-vincular').onclick = () => mostrarPantalla('#p-vincular');
@@ -802,13 +851,14 @@ function conectarEventos() {
     const u = estado.usuario;
     /* La versión sirve para saber de un vistazo si el teléfono está corriendo
        el build que se acaba de publicar. */
-    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v26';
+    $('#menu-usuario').textContent = (u ? u.email + ' · ' : '') + 'v27';
     abrirHoja('#p-menu');
   };
   $('#btn-etiquetas').onclick = generarEtiquetas;
   $('#btn-deshacer-etiquetas').onclick = deshacerEtiquetas;
   $('#btn-cerrar-etiquetas').onclick = cerrarHojas;
   $('#btn-catalogo').onclick = () => { location.href = './admin/'; };
+  $('#btn-tema').onclick = cambiarTema;
   $('#btn-refrescar').onclick = () => { cerrarHojas(); refrescarCatalogo(true); };
   $('#btn-vaciar').onclick = () => { cerrarHojas(); vaciarPedido(); aviso('Pedido vaciado'); };
   $('#btn-salir').onclick = () => cerrarSesion(false);

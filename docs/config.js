@@ -4,6 +4,11 @@ window.PEDIDOS_CONFIG = {
   /* URL del Web App de Apps Script, terminada en /exec */
   apiUrl:   'https://script.google.com/macros/s/AKfycbyg3KkaLa5OcPQFHtN92m_0_ELSRhsIP1-M0ymIJANxUroesRt849Cev83qb-eLm9YR/exec',
 
+  /* Diseño: 'editorial' o 'clasico'. Cambiar esto acá lo cambia para todos.
+     Cada dispositivo puede elegir el suyo desde el menú de la app, y
+     ?tema=clasico en la URL fuerza uno sin tocar nada. */
+  tema: 'editorial',
+
   /* Client ID del cliente OAuth 2.0 (tipo Web) de Google Cloud */
   clientId: '938884961121-4mkkgm298jcqgql6jq9p9vps45e3gncu.apps.googleusercontent.com',
 };

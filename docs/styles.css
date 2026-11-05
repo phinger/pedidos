@@ -47,6 +47,9 @@
    las hojas inferiores quedaban visibles siempre, tapando media pantalla. */
 [hidden] { display: none !important; }
 
+/* Piezas que solo usa el tema editorial: ocultas salvo que él las encienda. */
+.marca-fila, .cuenta-cabecera, .grupo-cuenta { display: none; }
+
 html, body {
   margin: 0;
   padding: 0;
