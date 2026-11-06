@@ -227,6 +227,23 @@
   font-weight: 700;
 }
 
+/* ── Preparar un pedido ──────────────────────────────────────────────── */
+
+:root[data-tema="editorial"] .preparar-cabecera { border-bottom-color: var(--texto); }
+:root[data-tema="editorial"] .preparar-quien h2 { font-family: var(--serif); }
+:root[data-tema="editorial"] .preparar-quien p { font-family: var(--mono); font-size: 12px; }
+:root[data-tema="editorial"] .preparar-avance b { font-family: var(--serif); }
+:root[data-tema="editorial"] .preparar-avance span { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; }
+
+:root[data-tema="editorial"] .renglon { border-radius: 4px; background: var(--superficie); }
+:root[data-tema="editorial"] .renglon-cantidad {
+  border-radius: 3px;
+  font-family: var(--serif);
+  font-size: 25px;
+}
+:root[data-tema="editorial"] .renglon-marca { border-radius: 3px; }
+:root[data-tema="editorial"] .preparar-pie { border-top-color: var(--texto); }
+
 /* ── Diálogo de edición ──────────────────────────────────────────────── */
 
 :root[data-tema="editorial"] .dialogo { border-radius: 6px; }

@@ -67,6 +67,8 @@ const estado = {
   filtroEstado: '__todos__',
   seleccion: new Set(),      // ids de pedidos tildados
   editando: null,
+  preparando: null,          // pedido abierto en la pantalla de preparación
+  listos: new Set(),         // renglones ya levantados de ese pedido
 };
 
 const TODOS = '__todos__';
@@ -626,7 +628,11 @@ function crearTarjetaPedido(p, precios) {
   cuando.className = 'pedido-cuando';
   cuando.textContent = [p.fecha, p.hora].filter(Boolean).join(' · ');
 
-  const centro = document.createElement('div');
+  const centro = document.createElement('button');
+  centro.type = 'button';
+  centro.className = 'pedido-abrir';
+  centro.title = 'Abrir para preparar';
+  centro.onclick = () => abrirPreparacion(p);
   const quien = document.createElement('div');
   quien.className = 'pedido-quien';
   quien.textContent = p.nombre;
@@ -840,6 +846,118 @@ async function recargarCatalogo() {
     estado.productos = r.productos;
     estado.columnas = r.columnas || {};
   } catch { /* el listado de pedidos ya se actualizó igual */ }
+}
+
+/* ── Preparar un pedido ──────────────────────────────────────────────── */
+
+/* Lo tildado vive en el navegador que está preparando, no en la planilla: es
+   una ayuda mientras se levanta la mercadería, no un dato del pedido.
+   Sobrevive a cerrar y volver a abrir, y no se pisa entre dispositivos. */
+const clavePreparado = (id) => 'pedidos.preparado.' + id;
+
+function leerPreparado(id) {
+  try { return new Set(JSON.parse(localStorage.getItem(clavePreparado(id)) || '[]')); }
+  catch { return new Set(); }
+}
+
+function guardarPreparado(id, listos) {
+  try { localStorage.setItem(clavePreparado(id), JSON.stringify([...listos])); }
+  catch { /* sin almacenamiento, se pierde al cerrar */ }
+}
+
+function abrirPreparacion(pedido) {
+  estado.preparando = pedido;
+  estado.listos = leerPreparado(pedido.id);
+
+  $('#preparar-nombre').textContent = pedido.nombre || pedido.id;
+  $('#preparar-datos').textContent =
+    [pedido.id, pedido.fecha, pedido.hora, pedido.status].filter(Boolean).join(' · ');
+
+  const cont = $('#preparar-lista');
+  cont.innerHTML = '';
+
+  pedido.items.forEach((item, i) => {
+    /* La clave lleva el índice: si un pedido repite un producto en dos
+       renglones, tildar uno no debe tildar el otro. */
+    const clave = i + '·' + item.nombre;
+
+    const fila = document.createElement('button');
+    fila.type = 'button';
+    fila.className = 'renglon';
+    fila.dataset.listo = String(estado.listos.has(clave));
+    fila.setAttribute('aria-pressed', String(estado.listos.has(clave)));
+
+    const cantidad = document.createElement('span');
+    cantidad.className = 'renglon-cantidad';
+    cantidad.textContent = item.cantidad;
+
+    const nombre = document.createElement('span');
+    nombre.className = 'renglon-nombre';
+    nombre.textContent = item.nombre;
+
+    const marca = document.createElement('span');
+    marca.className = 'renglon-marca';
+    marca.textContent = '✓';
+    marca.setAttribute('aria-hidden', 'true');
+
+    fila.append(cantidad, nombre, marca);
+    fila.onclick = () => {
+      const listo = !estado.listos.has(clave);
+      if (listo) estado.listos.add(clave);
+      else estado.listos.delete(clave);
+      fila.dataset.listo = String(listo);
+      fila.setAttribute('aria-pressed', String(listo));
+      guardarPreparado(pedido.id, estado.listos);
+      renderAvance();
+    };
+
+    cont.appendChild(fila);
+  });
+
+  renderAvance();
+  $('#p-preparar').hidden = false;
+}
+
+function renderAvance() {
+  const pedido = estado.preparando;
+  if (!pedido) return;
+
+  const total = pedido.items.length;
+  const hechos = Math.min(estado.listos.size, total);
+  const falta = total - hechos;
+
+  $('#preparar-cuenta').textContent = hechos + '/' + total;
+  $('#preparar-progreso').style.width = total ? (hechos / total * 100) + '%' : '0';
+  $('#preparar-falta').textContent = falta === 0
+    ? 'Pedido completo'
+    : 'Falta' + (falta === 1 ? ' 1 producto' : 'n ' + falta + ' productos');
+
+  /* Entregar solo aparece con todo tildado: es el final natural de preparar,
+     y ofrecerlo antes invita a entregar algo a medio armar. */
+  const terminable = pedido.status !== estado.estados.entregado &&
+                     pedido.status !== estado.estados.cancelado;
+  $('#btn-preparar-entregar').hidden = !(falta === 0 && total > 0 && terminable);
+}
+
+function cerrarPreparacion() {
+  estado.preparando = null;
+  $('#p-preparar').hidden = true;
+  render();
+}
+
+async function entregarDesdePreparacion() {
+  const pedido = estado.preparando;
+  if (!pedido) return;
+
+  const boton = $('#btn-preparar-entregar');
+  await operar(pedido, 'entregar', boton);
+
+  if (pedido.status === estado.estados.entregado) {
+    /* Entregado: lo tildado ya no sirve y no tiene por qué seguir ocupando
+       el almacenamiento del dispositivo. */
+    try { localStorage.removeItem(clavePreparado(pedido.id)); } catch { /* da igual */ }
+    cerrarPreparacion();
+  }
 }
 
 /* ── Edición del detalle ─────────────────────────────────────────────── */
@@ -1203,12 +1321,16 @@ function conectarEventos() {
   $('#btn-guardar-edicion').addEventListener('click', guardarEdicion);
   $('#velo').addEventListener('click', cerrarEdicion);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#dialogo-editar').hidden) cerrarEdicion();
+    if (e.key !== 'Escape') return;
+    if (!$('#dialogo-editar').hidden) cerrarEdicion();
+    else if (!$('#p-preparar').hidden) cerrarPreparacion();
   });
 
   rotularModo();
   $('#btn-modo').addEventListener('click', cambiarModo);
   $('#btn-reconciliar').addEventListener('click', reconciliarStock);
+  $('#btn-cerrar-preparar').addEventListener('click', cerrarPreparacion);
+  $('#btn-preparar-entregar').addEventListener('click', entregarDesdePreparacion);
 
   $('#btn-recargar').addEventListener('click', () => {
     cargar();

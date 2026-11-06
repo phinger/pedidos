@@ -198,6 +198,25 @@ avisa de lo que falta, en vez de mostrar un número que no es. Al entregar en
 esa situación se congela lo que se pudo calcular y la pantalla lo advierte, que
 es el momento en que todavía se puede corregir.
 
+### Preparar un pedido
+
+Tocando el nombre de un pedido se abre una pantalla completa pensada para
+armarlo: la lista entera de productos, en renglones grandes, con la cantidad
+primero porque es lo que se mira al levantar mercadería. **No se edita nada**;
+se toca el renglón para marcar lo que ya entró en la bolsa.
+
+En pantalla ancha el listado pasa a varias columnas, así un pedido largo entra
+entero sin scrollear mientras se tienen las manos ocupadas. Arriba, cuántos
+van; abajo, cuántos faltan.
+
+Lo tildado se guarda **en el navegador que está preparando**, no en la
+planilla: es una ayuda durante el armado, no un dato del pedido. Sobrevive a
+cerrar y volver a abrir, y dos personas preparando en dispositivos distintos no
+se pisan. Al entregar se borra.
+
+Con todo tildado aparece **Entregar pedido** en el pie, que es el final natural
+del armado. Antes no se ofrece: invitaría a entregar algo a medio preparar.
+
 ### Editar un pedido
 
 El diálogo permite cambiar cantidades, quitar renglones —poner cero o la cruz
