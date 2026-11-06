@@ -462,6 +462,26 @@ tfoot input:focus {
   padding: calc(14px + env(safe-area-inset-top, 0px)) 20px 14px;
   border-bottom: 1px solid var(--borde);
 }
+/* Volver va primero y a la izquierda: es donde se busca en un teléfono. */
+.preparar-volver {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  margin-left: -10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--tenue);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 550;
+}
+.preparar-volver:hover { background: var(--superficie-2); color: var(--texto); }
+.preparar-volver:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
+
 .preparar-quien { flex: 1; min-width: 0; }
 .preparar-quien h2 {
   margin: 0;
@@ -581,15 +601,23 @@ tfoot input:focus {
   border-top: 1px solid var(--borde);
 }
 .preparar-pie p { margin: 0; color: var(--tenue); font-size: 14px; }
+/* Incompleto se nota en el pie, pero no bloquea: el aviso llega al confirmar. */
+.preparar-pie[data-completo="true"] p { color: var(--ok); font-weight: 600; }
 .preparar-pie .btn { height: 46px; padding: 0 22px; font-size: 16px; }
 
 @media (max-width: 560px) {
-  .preparar-cabecera { gap: 12px; padding-inline: 14px; }
-  .preparar-quien h2 { font-size: 21px; }
-  .preparar-avance b { font-size: 21px; }
-  .preparar-cerrar { display: none; }
+  .preparar-cabecera { gap: 10px; padding-inline: 10px 14px; }
+  .preparar-quien h2 { font-size: 20px; }
+  .preparar-avance b { font-size: 20px; }
+  /* Queda la flecha sola: el botón nunca desaparece, que fue el error. */
+  .preparar-volver span { display: none; }
+  .preparar-volver { width: 40px; padding: 0; justify-content: center; }
   .preparar-lista { padding-inline: 14px; }
   .renglon-nombre { font-size: 18px; }
+
+  .preparar-pie { flex-direction: column; align-items: stretch; gap: 10px; }
+  .preparar-pie p { text-align: center; }
+  .preparar-pie .btn { width: 100%; height: 50px; }
 }
 
 /* ── Diálogo ─────────────────────────────────────────────────────────── */

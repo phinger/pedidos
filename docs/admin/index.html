@@ -8,10 +8,10 @@
 <meta name="theme-color" content="#101114" media="(prefers-color-scheme: dark)">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="../icons/icon-192.png">
-<link rel="stylesheet" href="admin.css?v=31">
+<link rel="stylesheet" href="admin.css?v=32">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&amp;family=IBM+Plex+Mono:wght@400;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
-<link rel="stylesheet" href="tema-editorial.css?v=31">
+<link rel="stylesheet" href="tema-editorial.css?v=32">
 </head>
 <body>
 
@@ -130,6 +130,13 @@
 <!-- ── Preparar un pedido: pantalla completa, solo para tildar ─────────── -->
 <section class="preparar" id="p-preparar" hidden aria-modal="true" role="dialog" aria-label="Preparar el pedido">
   <header class="preparar-cabecera">
+    <button class="preparar-volver" id="btn-cerrar-preparar" aria-label="Volver a los pedidos">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+      <span>Pedidos</span>
+    </button>
     <div class="preparar-quien">
       <h2 id="preparar-nombre">—</h2>
       <p id="preparar-datos"></p>
@@ -138,7 +145,6 @@
       <b id="preparar-cuenta">0/0</b>
       <span>preparados</span>
     </div>
-    <button class="btn btn-fantasma preparar-cerrar" id="btn-cerrar-preparar">Cerrar</button>
   </header>
 
   <div class="preparar-barra"><i id="preparar-progreso"></i></div>
@@ -147,7 +153,7 @@
 
   <footer class="preparar-pie">
     <p id="preparar-falta">—</p>
-    <button class="btn btn-entregar" id="btn-preparar-entregar" hidden>Entregar pedido</button>
+    <button class="btn btn-entregar" id="btn-preparar-entregar">Entregar pedido</button>
   </footer>
 </section>
 
@@ -184,7 +190,7 @@
 
 <div class="aviso" id="aviso" hidden role="status"></div>
 
-<script src="../config.js?v=31"></script>
+<script src="../config.js?v=32"></script>
 <script>
 /* Antes de pintar, para que no se vea un parpadeo del tema anterior.
    Prioridad: lo que diga la URL, después la preferencia del dispositivo,
@@ -208,6 +214,6 @@
   }
 })();
 </script>
-<script src="admin.js?v=31"></script>
+<script src="admin.js?v=32"></script>
 </body>
 </html>

@@ -230,6 +230,7 @@
 /* ── Preparar un pedido ──────────────────────────────────────────────── */
 
 :root[data-tema="editorial"] .preparar-cabecera { border-bottom-color: var(--texto); }
+:root[data-tema="editorial"] .preparar-volver { border-radius: 4px; font-family: var(--sans); }
 :root[data-tema="editorial"] .preparar-quien h2 { font-family: var(--serif); }
 :root[data-tema="editorial"] .preparar-quien p { font-family: var(--mono); font-size: 12px; }
 :root[data-tema="editorial"] .preparar-avance b { font-family: var(--serif); }

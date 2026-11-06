@@ -51,7 +51,7 @@ const calcularMonto = (items, preciosPorNombre) => {
    con cero está agotado. */
 const tieneStock = (p) => p.stock !== null && p.stock !== undefined;
 
-const $  = (sel) => document.querySelector(sel);
+const $  = (sel) => document.querySelector(sel);   // acepta cualquier selector
 
 const estado = {
   vista: 'productos',
@@ -931,12 +931,14 @@ function renderAvance() {
   $('#preparar-falta').textContent = falta === 0
     ? 'Pedido completo'
     : 'Falta' + (falta === 1 ? ' 1 producto' : 'n ' + falta + ' productos');
+  $('.preparar-pie') && $('.preparar-pie').setAttribute('data-completo', String(falta === 0));
 
-  /* Entregar solo aparece con todo tildado: es el final natural de preparar,
-     y ofrecerlo antes invita a entregar algo a medio armar. */
+  /* Entregar está siempre a la vista: esconderlo hasta tildar todo obligaba a
+     volver al listado para entregar un pedido que ya estaba armado. Si falta
+     algo no se bloquea, se pregunta al confirmar. */
   const terminable = pedido.status !== estado.estados.entregado &&
                      pedido.status !== estado.estados.cancelado;
-  $('#btn-preparar-entregar').hidden = !(falta === 0 && total > 0 && terminable);
+  $('#btn-preparar-entregar').hidden = !terminable;
 }
 
 function cerrarPreparacion() {
@@ -948,6 +950,11 @@ function cerrarPreparacion() {
 async function entregarDesdePreparacion() {
   const pedido = estado.preparando;
   if (!pedido) return;
+
+  const falta = pedido.items.length - Math.min(estado.listos.size, pedido.items.length);
+  if (falta > 0 && !confirm(
+      'Todavía ' + (falta === 1 ? 'falta 1 producto' : 'faltan ' + falta + ' productos') +
+      ' sin marcar.\n\n¿Entregar el pedido igual?')) return;
 
   const boton = $('#btn-preparar-entregar');
   await operar(pedido, 'entregar', boton);

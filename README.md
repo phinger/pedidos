@@ -214,8 +214,9 @@ planilla: es una ayuda durante el armado, no un dato del pedido. Sobrevive a
 cerrar y volver a abrir, y dos personas preparando en dispositivos distintos no
 se pisan. Al entregar se borra.
 
-Con todo tildado aparece **Entregar pedido** en el pie, que es el final natural
-del armado. Antes no se ofrece: invitaría a entregar algo a medio preparar.
+**Entregar pedido** está siempre en el pie, y arriba a la izquierda queda
+*Pedidos* para volver al listado. Si se entrega con renglones sin marcar, se
+pregunta antes: no bloquea, avisa.
 
 ### Editar un pedido
 
