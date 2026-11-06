@@ -418,12 +418,12 @@ tfoot input:focus {
 .pedido-acciones { display: flex; gap: 6px; }
 .pedido-acciones .btn { height: 34px; padding: 0 12px; font-size: 14px; }
 .btn-primario { background: var(--acento); border-color: var(--acento); color: #fff; }
-.btn-primario:hover { filter: brightness(1.06); background: var(--acento); }
+.btn-primario:hover:not(:disabled) { filter: brightness(1.06); background: var(--acento); }
 
 /* Entregar tiene su propio color: es la acción que mueve stock y congela el
    monto, y conviene que no se confunda con el resto. */
 .btn-entregar { background: var(--azul); border-color: var(--azul); color: #fff; }
-.btn-entregar:hover { filter: brightness(1.08); background: var(--azul); }
+.btn-entregar:hover:not(:disabled) { filter: brightness(1.08); background: var(--azul); }
 .btn:disabled { opacity: .45; cursor: default; }
 
 /* ── Preparar un pedido ──────────────────────────────────────────────── */

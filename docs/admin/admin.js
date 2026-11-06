@@ -933,12 +933,15 @@ function renderAvance() {
     : 'Falta' + (falta === 1 ? ' 1 producto' : 'n ' + falta + ' productos');
   $('.preparar-pie') && $('.preparar-pie').setAttribute('data-completo', String(falta === 0));
 
-  /* Entregar está siempre a la vista: esconderlo hasta tildar todo obligaba a
-     volver al listado para entregar un pedido que ya estaba armado. Si falta
-     algo no se bloquea, se pregunta al confirmar. */
+  /* Entregar se habilita recién con todo tildado, pero el botón está siempre
+     a la vista: esconderlo dejaba el pie sin nada y no se entendía qué faltaba
+     para que apareciera. Deshabilitado dice las dos cosas a la vez. */
   const terminable = pedido.status !== estado.estados.entregado &&
                      pedido.status !== estado.estados.cancelado;
-  $('#btn-preparar-entregar').hidden = !terminable;
+  const boton = $('#btn-preparar-entregar');
+  boton.hidden = !terminable;
+  boton.disabled = falta > 0;
+  boton.title = falta > 0 ? 'Marcá todos los productos para poder entregarlo' : '';
 }
 
 function cerrarPreparacion() {
@@ -950,11 +953,6 @@ function cerrarPreparacion() {
 async function entregarDesdePreparacion() {
   const pedido = estado.preparando;
   if (!pedido) return;
-
-  const falta = pedido.items.length - Math.min(estado.listos.size, pedido.items.length);
-  if (falta > 0 && !confirm(
-      'Todavía ' + (falta === 1 ? 'falta 1 producto' : 'faltan ' + falta + ' productos') +
-      ' sin marcar.\n\n¿Entregar el pedido igual?')) return;
 
   const boton = $('#btn-preparar-entregar');
   await operar(pedido, 'entregar', boton);

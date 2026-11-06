@@ -214,9 +214,9 @@ planilla: es una ayuda durante el armado, no un dato del pedido. Sobrevive a
 cerrar y volver a abrir, y dos personas preparando en dispositivos distintos no
 se pisan. Al entregar se borra.
 
-**Entregar pedido** está siempre en el pie, y arriba a la izquierda queda
-*Pedidos* para volver al listado. Si se entrega con renglones sin marcar, se
-pregunta antes: no bloquea, avisa.
+**Entregar pedido** está siempre en el pie, y se habilita recién con todos los
+renglones marcados — el pie dice cuántos faltan. Arriba a la izquierda queda
+*Pedidos* para volver al listado.
 
 ### Editar un pedido
 
